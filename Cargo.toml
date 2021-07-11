@@ -10,17 +10,9 @@ edition = "2018"
 
 
 [[bin]]
-name = "server"
-path = "src/server/server.rs"
-
-[[bin]]
-name = "client"
-path = "src/client/client.rs"
-
-[[bin]]
 name = "coordinator"
-path = "src/coordinator/coordinator.rs"
+path = "src/coordinator/main.rs"
 
 [[bin]]
 name = "node"
-path = "src/node/node.rs"
+path = "src/node/main.rs"
