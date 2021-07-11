@@ -23,3 +23,16 @@ Nuestra implementacion:
  - Ademas envia al nodo lider un mensaje para que broadcastee el nodo al resto (algoritmo de eleccion de lider)
  - Cada nodo actualiza su copia local de la blockchain
 
+
+# Ejecucion
+
+Como tenemos dos compnentes hay que especificar cual queremos buildear/correr, para eso se usa
+
+```bash
+cargo run --bin coordinator
+
+# o
+
+cargo run --bin node
+```
+
