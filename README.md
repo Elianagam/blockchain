@@ -1,6 +1,11 @@
 Blockchain Rustica
 ==================
 
+### Implementacion de los nodos:
+
+2 componentes: 
+ - El coordinador (servidor que se encarga de limitar a 1 la concurrencia en la seccion critica)
+ - Cliente: es el que contiene la informacion propia de la blockchain (y tambien es el que accede a la seccion critica)
 
 ### Implementacion de la blockchain:
 
