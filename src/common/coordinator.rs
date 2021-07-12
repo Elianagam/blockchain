@@ -42,9 +42,4 @@ impl Coordinator {
             }
         }   
     }
-
-    fn loop(&self, reader) {
-        let mut buffer = String::new();
-                reader.read_line(&mut buffer);
-    }
 }
