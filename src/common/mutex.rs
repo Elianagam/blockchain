@@ -4,10 +4,10 @@ pub struct Mutex;
 
 impl Mutex {
     pub fn acquire(&mut self, socket: Socket) {
-        socket.write("BUSY".to_string());
+        socket.write("BUSY\n".to_string());
     }
 
     pub fn release(&mut self, socket: Socket) {
-        socket.write("OK".to_string());
+        socket.write("OK\n".to_string());
     }
 }

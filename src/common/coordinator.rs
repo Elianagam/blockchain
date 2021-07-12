@@ -9,23 +9,42 @@ pub struct Coordinator {
 
 impl Coordinator {
     pub fn new(address: String) -> Coordinator {
-		let mut ret = Coordinator {
+        let mut ret = Coordinator {
             listener: TcpListener::bind(address).unwrap();
         };
         ret
     }
 
     pub fn accept(&self) -> Socket {
-    	self.listener.accept().map(|(socket, _addr)| {
+        self.listener.accept().map(|(socket, _addr)| {
             Socket { fd: socket }
         })
     }
 
+    pub fn run(&self) {
+        let mutex = Arc::new(Semaphore::new(1));
 
-    /*
-            let tcp_stream = stream.unwrap();
-        let mut writer = tcp_stream.try_clone().unwrap();
-        let mut reader = BufReader::new(tcp_stream);
-        let local_mutex = mutex.clone();
-        */ 
+        loop {
+            let new_socket = self.accept();
+
+            let buffer = new_socket.read();
+            match buffer {
+                "BUSY\n" => {
+                    println!("[COORDINATOR] pide lock");
+                }
+                "OK\n" => {
+                    println!("[COORDINATOR] libera lock");
+                }
+                "" => {
+                    println!("[COORDINATOR] desconectado");
+                    break;
+                }
+            }
+        }   
+    }
+
+    fn loop(&self, reader) {
+        let mut buffer = String::new();
+                reader.read_line(&mut buffer);
+    }
 }

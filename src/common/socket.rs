@@ -14,8 +14,18 @@ impl Socket {
 		writer.write_all(message.as_bytes()).unwrap();
 	}
 
-	pub fn read(&self) {
+	pub fn read(&self) -> String {
+		let mut reader = BufReader::new(self.fd);
+
 		let mut buffer = String::new();
-        self.fd.read_line(&mut buffer);
+		reader.read_line(&mut buffer);
+
+		buffer.as_str()
+	}
+
+	pub fn accept(&self) -> Socket {
+		self.listener.accept().map(|(socket, _addr)| {
+			Socket { fd: socket }
+		})
 	}
 }
