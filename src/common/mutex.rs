@@ -11,3 +11,5 @@ impl Mutex {
         socket.write("release\n".to_string());
     }
 }
+
+pub struct Node;
