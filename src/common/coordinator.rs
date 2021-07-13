@@ -4,35 +4,29 @@ use std::net::TcpListener;
 
 
 pub struct Coordinator {
-    listener: TcpListener,
+    socket: Socket,
 }
 
 impl Coordinator {
-    pub fn new(address: String) -> Coordinator {
+    pub fn new(ip: String) -> Coordinator {
         let mut ret = Coordinator {
-            listener: TcpListener::bind(address).unwrap();
+            socket: Socket::new(ip, "coordinator")
         };
         ret
-    }
-
-    pub fn accept(&self) -> Socket {
-        self.listener.accept().map(|(socket, _addr)| {
-            Socket { fd: socket }
-        })
     }
 
     pub fn run(&self) {
         let mutex = Arc::new(Semaphore::new(1));
 
         loop {
-            let new_socket = self.accept();
+            let new_socket = self.socket.accept();
 
             let buffer = new_socket.read();
             match buffer {
-                "BUSY\n" => {
+                "adquire\n" => {
                     println!("[COORDINATOR] pide lock");
                 }
-                "OK\n" => {
+                "release\n" => {
                     println!("[COORDINATOR] libera lock");
                 }
                 "" => {

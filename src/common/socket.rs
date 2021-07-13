@@ -1,6 +1,5 @@
 use std::io::{BufRead, BufReader};
 use std::net::TcpListener;
-use super::socket::Socket;
 
 
 pub struct Socket {
@@ -11,8 +10,8 @@ impl Socket {
 
 	pub fn new(ip: String, type: String) -> Self {
 		let socket = match type {
-			"client" => Socket{ fd: connect(ip) }
-			"server" => Socket{ fd: listen(ip) }
+			"node" => Socket{ fd: connect(ip) }
+			"coordinator" => Socket{ fd: listen(ip) }
 		}
 		socket
 	}

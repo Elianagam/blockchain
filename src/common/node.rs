@@ -9,7 +9,7 @@ impl Node {
     pub new(id: String, ip: String) -> Self {
         Node{
             id: id, 
-            socket: Socket::new(ip, "client")
+            socket: Socket::new(ip, "node")
         }
     }
 }
