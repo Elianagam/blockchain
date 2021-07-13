@@ -8,6 +8,15 @@ pub struct Socket {
 }
 
 impl Socket {
+
+	pub fn new(ip: String, type: String) -> Self {
+		let socket = match type {
+			"client" => Socket{ fd: connect(ip) }
+			"server" => Socket{ fd: listen(ip) }
+		}
+		socket
+	}
+
 	pub fn write(&self, message: String) {
 		let writer = self.fd.try_clone().unwrap();
 
@@ -23,9 +32,17 @@ impl Socket {
 		buffer.as_str()
 	}
 
-	pub fn accept(&self) -> Socket {
-		self.listener.accept().map(|(socket, _addr)| {
+	 fn accept(&self) -> Socket {
+		self.fd.accept().map(|(socket, _addr)| {
 			Socket { fd: socket }
 		})
+	}
+
+	fn listen(ip: String) -> TcpStream {
+		TcpListener::bind(ip).unwrap() 
+	}
+
+	fn connect(ip: String) -> TcpStream {
+		TcpStream::connect(ip).unwrap();
 	}
 }
