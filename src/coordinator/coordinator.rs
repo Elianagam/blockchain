@@ -1,67 +1,80 @@
 #[path = "../common/socket.rs"]
 mod socket;
-use socket::{SocketServer, Socket};
+use std::io::{BufReader,BufRead,Write};
+use std::net::TcpListener;
+
 
 use std::sync::Arc;
 use std_semaphore::Semaphore;
 use std::thread::{self};
 
 
+
 pub struct Coordinator {
-    socket: SocketServer,
+    socket: TcpListener,
 }
 
 impl Coordinator {
     pub fn new(ip: String) -> Coordinator {
         Coordinator {
-            socket: SocketServer::new(ip),
+            socket: TcpListener::bind(ip).unwrap(),
         }
     }
 
-
     pub fn run(&self) {
         let mutex = Arc::new(Semaphore::new(1));
-        let mut connected = Vec::new();
 
-        loop {
-            // socket accept new client si no hay nadie se bloquea
-            let stream = self.socket.accept();
-            let new_socket = Socket { fd: stream };
-            println!("Coordinator accept new Node-Client");
-            connected.push(new_socket);
-
-            // create Node with socket acceptor
-            let id = new_socket.read();
-            println!("[COORDINATOR] Cliente conectado {}", id);
+        for stream in self.socket.incoming() {
+            let tcp_stream = stream.unwrap();
+            let mut writer = tcp_stream.try_clone().unwrap();
+            let mut reader = BufReader::new(tcp_stream);
             let local_mutex = mutex.clone();
-
+            let mut id = String::new();
+            reader.read_line(&mut id).unwrap();
+            id = id.replace("\n", "");
+            println!("[COORDINATOR] Cliente conectado {}", id);
             thread::spawn(move || {
-                let mine = false;
+                let mut mine = false;
 
-                let buffer = new_socket.read();
+                loop {
+                    let mut buffer = String::new();
+                    reader.read_line(&mut buffer).unwrap();
                     match buffer.as_str() {
-                        "adquire\n" => {
-                            println!("[COORDINATOR] pide lock");
+                        "acquire\n" => {
+                            println!("[COORDINATOR] pide lock {}", id);
                             if !mine {
                                 local_mutex.acquire();
-                                //mine = true;
-                                new_socket.write(format!("OK\n"));
+                                mine = true;
+                                writer.write_all("OK\n".as_bytes()).unwrap();
                                 println!("[COORDINATOR] le dí lock a {}", id);
+                            } else {
+                                println!("[COORDINATOR] ERROR: ya lo tiene");
                             }
                         }
                         "release\n" => {
-                            println!("[COORDINATOR] libera lock");
+                            println!("[COORDINATOR] libera lock {}", id);
                             if mine {
                                 local_mutex.release();
-                                //mine = false;
+                                mine = false;
+                            } else {
+                                println!("[COORDINATOR] ERROR: no lo tiene!")
                             }
                         }
                         "" => {
-                            println!("[COORDINATOR] desconectado");
+                          println!("[COORDINATOR] desconectado {}", id);
+                          break;
+                        }
+                        _ => {
+                            println!("[COORDINATOR] ERROR: mensaje desconocido de {}", id);
+                            break;
                         }
                     }
                 }
-            );
-        }   
+                if mine {
+                    println!("[COORDINATOR] ERROR: tenia el lock");
+                    local_mutex.release();
+                }
+            });
+        }
     }
 }
