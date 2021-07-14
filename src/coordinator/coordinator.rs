@@ -26,7 +26,7 @@ impl Coordinator {
         let connected = Vec::new();
 
         loop {
-            // socket accept new client
+            // socket accept new client si no hay nadie se bloquea
             let new_socket = self.socket.accept();
             println!("Coordinator accept new Node-Client");
             connected.push(new_socket);
@@ -36,34 +36,35 @@ impl Coordinator {
             println!("[COORDINATOR] Cliente conectado {}", id);
             let local_mutex = mutex.clone();
 
-
             thread::spawn(move || {
                 let mut mine = false;
 
-                let buffer = new_socket.read();
-                match buffer {
-                    "adquire\n" => {
-                        println!("[COORDINATOR] pide lock");
-                        if !mine {
-                            local_mutex.acquire();
-                            mine = true;
-                            self.socket.write(format!("OK\n"));
-                            println!("[COORDINATOR] le dí lock a {}", id);
+                loop {
+                    let buffer = new_socket.read();
+                    match buffer {
+                        "adquire\n" => {
+                            println!("[COORDINATOR] pide lock");
+                            if !mine {
+                                local_mutex.acquire();
+                                mine = true;
+                                self.socket.write(format!("OK\n"));
+                                println!("[COORDINATOR] le dí lock a {}", id);
+                            }
                         }
-                    }
-                    "release\n" => {
-                        println!("[COORDINATOR] libera lock");
-                        if mine {
-                            local_mutex.release();
-                            mine = false;
+                        "release\n" => {
+                            println!("[COORDINATOR] libera lock");
+                            if mine {
+                                local_mutex.release();
+                                mine = false;
+                            }
                         }
-                    }
-                    "" => {
-                        println!("[COORDINATOR] desconectado");
-                        break;
+                        "" => {
+                            println!("[COORDINATOR] desconectado");
+                            break;
+                        }
                     }
                 }
-            }
+            })
         }   
     }
 }
