@@ -2,7 +2,6 @@ use std::net::TcpStream;
 use std::io::{BufReader, BufRead, Write};
 use std::net::TcpListener;
 
-#[derive(Clone)]
 pub struct Socket {
 	fd: TcpStream
 }
@@ -13,19 +12,19 @@ impl Socket {
 	}
 
 	pub fn write(&self, message: String) {
-		let writer = self.fd.try_clone().unwrap();
+		let mut writer = self.fd.try_clone().unwrap();
 
 		writer.write_all(message.as_bytes()).unwrap();
 	}
 
-	pub fn read(&self) -> &str {
-		let tcp_stream = self.fd;
+	pub fn read(&self) -> String {
+		let tcp_stream = &self.fd;
 		let mut reader = BufReader::new(tcp_stream);
 
 		let mut buffer = String::new();
 		reader.read_line(&mut buffer);
 
-		buffer.as_str()
+		buffer.as_str().to_string()
 	}
 }
 
@@ -40,10 +39,8 @@ impl SocketServer {
 		socket
 	}
 
-	pub fn accept(&self) -> Socket {
-		let socket = self.fd.accept().map(|(new_socket, _addr)| {
-			Socket { fd: new_socket }
-		});
-		socket.unwrap()
+	pub fn accept(&self) -> TcpStream {
+		let (stream, _addr) = self.fd.accept().unwrap();
+		stream
 	}
 }

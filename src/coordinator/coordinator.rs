@@ -1,6 +1,6 @@
 #[path = "../common/socket.rs"]
 mod socket;
-use socket::{SocketServer};
+use socket::{SocketServer, Socket};
 
 use std::sync::Arc;
 use std_semaphore::Semaphore;
@@ -25,7 +25,8 @@ impl Coordinator {
 
         loop {
             // socket accept new client si no hay nadie se bloquea
-            let new_socket = self.socket.accept();
+            let stream = self.socket.accept();
+            let new_socket = Socket { fd: stream };
             println!("Coordinator accept new Node-Client");
             connected.push(new_socket);
 
@@ -35,15 +36,15 @@ impl Coordinator {
             let local_mutex = mutex.clone();
 
             thread::spawn(move || {
-                let mut mine = false;
+                let mine = false;
 
                 let buffer = new_socket.read();
-                    match buffer {
+                    match buffer.as_str() {
                         "adquire\n" => {
                             println!("[COORDINATOR] pide lock");
                             if !mine {
                                 local_mutex.acquire();
-                                mine = true;
+                                //mine = true;
                                 new_socket.write(format!("OK\n"));
                                 println!("[COORDINATOR] le dí lock a {}", id);
                             }
@@ -52,7 +53,7 @@ impl Coordinator {
                             println!("[COORDINATOR] libera lock");
                             if mine {
                                 local_mutex.release();
-                                mine = false;
+                                //mine = false;
                             }
                         }
                         "" => {
