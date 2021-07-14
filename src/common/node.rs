@@ -8,12 +8,13 @@ pub struct Node {
 
 impl Node {
     pub fn new(id: String, ip: String) -> Self {
+        let socket = Socket::new(ip, "node");
         let node = Node{
             id: id, 
-            socket: Socket::new(ip, "node"), 
-            mutex_message: Mutex::new()
+            socket: socket, 
+            mutex: Mutex{socket: socket}
         }
-        self.socket.write(id);
+        socket.write(id);
         println!("[{}] conectado", id);
         node
     }
