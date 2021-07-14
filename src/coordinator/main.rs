@@ -1,5 +1,3 @@
-use crate::coordinator::Coordinator;
-
 mod coordinator;
 
 use std::env;
@@ -20,7 +18,7 @@ fn main() -> Result<(), ()> {
 
     let ip = args[1].clone();
     let coordinator = thread::spawn(move || {
-    	let coordinator = Coordinator::new(ip);
+    	let coordinator = coordinator::Coordinator::new(ip);
     	coordinator.run();
 	});
 
