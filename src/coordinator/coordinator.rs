@@ -1,23 +1,21 @@
-use std::io::{BufRead, BufReader};
-use std::net::TcpListener;
-use super::node::Node;
-use super::mutex::Mutex;
-use super::socket::Socket;
+#[path = "../common/socket.rs"]
+mod socket;
+use socket::Socket;
 
+use std::sync::Arc;
+use std_semaphore::Semaphore;
+use std::thread::{self};
 
 
 pub struct Coordinator {
     socket: Socket,
-    mutex: Mutex
 }
 
 impl Coordinator {
     pub fn new(ip: String) -> Coordinator {
-        let mut ret = Coordinator {
-            socket: Socket::new(ip, "coordinator")
-            mutex: Arc<Mutex::new()>
-        };
-        ret
+        Coordinator {
+            socket: Socket::new(ip, "coordinator".to_string()),
+        }
     }
 
 
@@ -39,8 +37,7 @@ impl Coordinator {
             thread::spawn(move || {
                 let mut mine = false;
 
-                loop {
-                    let buffer = new_socket.read();
+                let buffer = new_socket.read();
                     match buffer {
                         "adquire\n" => {
                             println!("[COORDINATOR] pide lock");
@@ -60,11 +57,10 @@ impl Coordinator {
                         }
                         "" => {
                             println!("[COORDINATOR] desconectado");
-                            break;
                         }
                     }
                 }
-            })
+            );
         }   
     }
 }
