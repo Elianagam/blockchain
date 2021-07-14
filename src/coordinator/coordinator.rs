@@ -1,8 +1,8 @@
-use std::net::TcpStream;
-use std::io::{BufReader,BufRead,Write};
+#[path = "node_accepted.rs"]
+mod node_accepted;
+use node_accepted::NodeAccepted;
+
 use std::net::TcpListener;
-
-
 use std::sync::Arc;
 use std_semaphore::Semaphore;
 use std::thread::{self};
@@ -12,30 +12,6 @@ pub struct Coordinator {
     socket: TcpListener,
 }
 
-struct NodeAccepted {
-    writer: TcpStream,
-    reader: BufReader<TcpStream>
-}
-
-impl NodeAccepted {
-    pub fn new(stream: TcpStream) -> NodeAccepted {
-        let writer = stream.try_clone().unwrap();
-        let reader = BufReader::new(stream);
-        NodeAccepted{writer: writer, reader: reader}
-    }
-
-    fn write(&mut self, message: String) {
-        self.writer.write_all(message.as_bytes()).unwrap();
-    }
-
-    fn read(&mut self) -> String{
-        let mut buffer = String::new();
-        self.reader.read_line(&mut buffer).unwrap();
-        buffer = buffer.replace("\n", "");
-
-        buffer.to_string()
-    }
-}
 
 impl Coordinator {
     pub fn new(ip: String) -> Coordinator {
@@ -43,8 +19,6 @@ impl Coordinator {
             socket: TcpListener::bind(ip).unwrap(),
         }
     }
-
-
 
     pub fn run(&self) {
         let mutex = Arc::new(Semaphore::new(1));
