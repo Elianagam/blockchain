@@ -1,5 +1,7 @@
+use std_semaphore::Semaphore;
 use super::socket::Socket;
 
+#[derive(Clone)]
 pub struct Mutex;
 
 impl Mutex {
@@ -11,5 +13,3 @@ impl Mutex {
         socket.write("release\n".to_string());
     }
 }
-
-pub struct Node;
