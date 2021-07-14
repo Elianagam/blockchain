@@ -28,6 +28,7 @@ impl Node {
             println!("[{}] pidiendo lock", self.id);
 
             self.acquire();
+
             println!("[{}] tengo el lock", self.id);
             thread::sleep(Duration::from_millis(100));
             println!("[{}] libero el lock", self.id);
@@ -38,8 +39,12 @@ impl Node {
     fn acquire(&mut self) {
         self.writer.write_all("acquire\n".as_bytes()).unwrap();
 
+
         let mut buffer = String::new();
+
         self.reader.read_line(&mut buffer).unwrap();
+        println!("{}", buffer);
+
     }
 
     fn release(&mut self) {
