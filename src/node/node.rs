@@ -1,4 +1,4 @@
-use super::socket::Socket;
+use super::socket::SocketClient;
 
 pub struct Node {
     id: id,
@@ -8,7 +8,7 @@ pub struct Node {
 
 impl Node {
     pub fn new(id: String, ip: String) -> Self {
-        let socket = Socket::new(ip, "node");
+        let socket = Socket::new(TcpStream::connect(ip).unwrap());
         let node = Node{
             id: id, 
             socket: socket, 

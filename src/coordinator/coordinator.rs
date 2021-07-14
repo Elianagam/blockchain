@@ -1,6 +1,6 @@
 #[path = "../common/socket.rs"]
 mod socket;
-use socket::Socket;
+use socket::{SocketServer};
 
 use std::sync::Arc;
 use std_semaphore::Semaphore;
@@ -8,13 +8,13 @@ use std::thread::{self};
 
 
 pub struct Coordinator {
-    socket: Socket,
+    socket: SocketServer,
 }
 
 impl Coordinator {
     pub fn new(ip: String) -> Coordinator {
         Coordinator {
-            socket: Socket::new(ip, "coordinator".to_string()),
+            socket: SocketServer::new(ip),
         }
     }
 
@@ -44,7 +44,7 @@ impl Coordinator {
                             if !mine {
                                 local_mutex.acquire();
                                 mine = true;
-                                self.socket.write(format!("OK\n"));
+                                new_socket.write(format!("OK\n"));
                                 println!("[COORDINATOR] le dí lock a {}", id);
                             }
                         }

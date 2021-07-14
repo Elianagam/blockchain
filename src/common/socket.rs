@@ -1,19 +1,26 @@
 use std::net::TcpStream;
-use std::io::{BufRead, BufReader};
+use std::io::{BufReader, BufRead, Write};
 use std::net::TcpListener;
 
-pub struct Socket;
+pub struct Socket {
+	fd: TcpStream
+}
 
 
 impl Socket {
-	pub fn write(fd: TcpStream, message: String) {
+	pub fn new(fd: TcpStream) -> Self {
+		Socket{fd: fd}
+	}
+
+	pub fn write(&self, message: String) {
 		let writer = self.fd.try_clone().unwrap();
 
 		writer.write_all(message.as_bytes()).unwrap();
 	}
 
-	pub fn read(fd: TcpStream) -> &str {
-		let mut reader = BufReader::new(self.fd);
+	pub fn read(&self) -> &str {
+		let tcp_stream = self.fd;
+		let mut reader = BufReader::new(tcp_stream);
 
 		let mut buffer = String::new();
 		reader.read_line(&mut buffer);
@@ -29,34 +36,14 @@ pub struct SocketServer {
 
 impl SocketServer {
 	pub fn new(ip: String) -> Self {
-		let socket = Socket{ fd: listen(ip) };
+		let socket = SocketServer{ fd: TcpListener::bind(ip).unwrap() };
 		socket
 	}
 
 	pub fn accept(&self) -> Socket {
-		self.fd.accept().map(|(socket, _addr)| {
-			Socket { fd: socket }
-		})
-	}
-
-	fn listen(ip: String) -> TcpListener {
-		TcpListener::bind(ip).unwrap() 
-	}
-}
-
-
-pub struct SocketClient {
-	pub fd: TcpStream
-}
-
-impl SocketClient {
-
-	pub fn new(ip: String) -> Self {
-		let socket = Socket{ fd: listen(ip) };
-		socket
-	}
-
-	fn connect(ip: String) -> TcpStream {
-		TcpStream::connect(ip).unwrap()
+		let socket = self.fd.accept().map(|(new_socket, _addr)| {
+			Socket { fd: new_socket }
+		});
+		socket.unwrap()
 	}
 }
