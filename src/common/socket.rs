@@ -2,10 +2,10 @@ use std::net::TcpStream;
 use std::io::{BufReader, BufRead, Write};
 use std::net::TcpListener;
 
+#[derive(Clone)]
 pub struct Socket {
 	fd: TcpStream
 }
-
 
 impl Socket {
 	pub fn new(fd: TcpStream) -> Self {

@@ -21,7 +21,7 @@ impl Coordinator {
 
     pub fn run(&self) {
         let mutex = Arc::new(Semaphore::new(1));
-        let connected = Vec::new();
+        let mut connected = Vec::new();
 
         loop {
             // socket accept new client si no hay nadie se bloquea
