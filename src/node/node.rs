@@ -24,13 +24,13 @@ impl Node {
     }
 
     pub fn run(&mut self) {
-        loop {
+        for _ in 1..10 {
             println!("[{}] pidiendo lock", self.id);
 
             self.acquire();
 
             println!("[{}] tengo el lock", self.id);
-            thread::sleep(Duration::from_millis(100));
+            thread::sleep(Duration::from_millis(1000));
             println!("[{}] libero el lock", self.id);
             self.release();
         }
@@ -43,7 +43,7 @@ impl Node {
         let mut buffer = String::new();
 
         self.reader.read_line(&mut buffer).unwrap();
-        println!("{}", buffer);
+        println!("[{}]: Read {}", self.id, buffer);
 
     }
 

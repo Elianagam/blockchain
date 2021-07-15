@@ -22,7 +22,6 @@ impl NodeAccepted {
     pub fn read(&mut self) -> String{
         let mut buffer = String::new();
         self.reader.read_line(&mut buffer).unwrap();
-        buffer = buffer.replace("\n", "");
 
         buffer.to_string()
     }
