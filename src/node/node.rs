@@ -1,35 +1,53 @@
-use super::socket::Socket;
+use core::time::Duration;
+use std::io::{BufReader,BufRead,Write};
+use std::net::{TcpStream};
+use std::thread;
 
 pub struct Node {
-    id: id,
-    socket: Socket
-    mutex_message: Mutex
+    writer: TcpStream,
+    reader: BufReader<TcpStream>,
+    id: String
 }
 
 impl Node {
-    pub fn new(id: String, ip: String) -> Self {
-        let socket = Socket::new(ip, "node");
-        let node = Node{
-            id: id, 
-            socket: socket, 
-            mutex: Mutex{socket: socket}
-        }
-        socket.write(id);
-        println!("[{}] conectado", id);
-        node
+    pub fn new(id: String, ip_address: String) -> Self {
+        let stream = TcpStream::connect(ip_address).unwrap();
+        let mut ret = Node {
+            writer: stream.try_clone().unwrap(),
+            reader: BufReader::new(stream),
+            id: id.to_string()
+        };
+
+        ret.writer.write_all((id.to_string() + "\n").as_bytes() ).unwrap();
+
+        ret
     }
 
-    pub fn run(&self) {
-        loop {
-            println!("[{}] durmiendo", self.id);
-            thread::sleep(Duration::from_millis(thread_rng().gen_range(1000, 3000)));
+    pub fn run(&mut self) {
+        for _ in 1..10 {
             println!("[{}] pidiendo lock", self.id);
 
-            self.mutex_message.acquire();
+            self.acquire();
+
             println!("[{}] tengo el lock", self.id);
-            thread::sleep(Duration::from_millis(thread_rng().gen_range(1000, 3000)));
+            thread::sleep(Duration::from_millis(1000));
             println!("[{}] libero el lock", self.id);
-            self.mutex_message.release();
+            self.release();
         }
+    }
+
+    fn acquire(&mut self) {
+        self.writer.write_all("acquire\n".as_bytes()).unwrap();
+
+
+        let mut buffer = String::new();
+
+        self.reader.read_line(&mut buffer).unwrap();
+        println!("[{}]: Read {}", self.id, buffer);
+
+    }
+
+    fn release(&mut self) {
+        self.writer.write_all("release\n".as_bytes()).unwrap();
     }
 }
