@@ -26,7 +26,7 @@ impl Coordinator {
         for stream in self.socket.incoming() {
             let tcp_stream = stream.unwrap();
             let mut node = NodeAccepted::new(tcp_stream);
-            let id = node.read();
+            let id = node.id.to_string();
             println!("[COORDINATOR] Cliente conectado {}", id);
 
             let local_mutex = mutex.clone();

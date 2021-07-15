@@ -17,7 +17,6 @@ fn main() -> Result<(), ()> {
     }
 
     let ip = args[1].clone();
-    println!("{}", ip);
     let coordinator = thread::spawn(move || {
     	let coordinator = coordinator::Coordinator::new(ip);
     	coordinator.run();
