@@ -104,7 +104,7 @@ fn usage() -> i32 {
 fn main() -> Result<(), ()> {
 	let args: Vec<String> = env::args().collect();
 
-    if args.len() != 4 {
+    if args.len() != 3 {
         process::exit(usage());
     }
 
