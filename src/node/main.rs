@@ -5,6 +5,9 @@ use std::sync::Arc;
 use std::thread;
 use std::env;
 use std::str;
+use std::process;
+
+mod node;
 
 const LEADER_ADDR: &str = "127.0.0.1:8000";
 
@@ -69,27 +72,33 @@ fn run_bully_thread(iamleader: bool) -> () {
 	}
 }
 
+fn usage() -> i32 {
+	println!("Usage: cargo r --bin node <id> <ip_address> ");
+	return -1;
+}
+
 
 fn main() -> Result<(), ()> {
 	let args: Vec<String> = env::args().collect();
 
-	let iamleader: bool = args.len() > 1 && args[1] == "--leader";
 
+	let iamleader: bool = args.len() > 1 && args[1] == "--leader";
 	let t = thread::spawn(move || run_bully_thread(iamleader));
 
 	t.join();
 
 	return Ok(());
 
-	let address = "0.0.0.0:10000".to_string();
+	let args: Vec<String> = env::args().collect();
+    if args.len() != 3 {
+        process::exit(usage());
+    }
 
-	let mut socket = TcpStream::connect(address).unwrap();
-	println!("Conectando. Ingrese texto");
+	let id = &args[1];
+	let address = &args[2];
 
-	for line in std::io::stdin().lock().lines() {
-		socket.write(line.unwrap().as_bytes()).unwrap();
-		socket.write("\n".as_bytes()).unwrap();
-	}
+    let mut node = node::Node::new(id.to_string(), address.to_string());
+    node.run();
 
 	Ok(())
 }
