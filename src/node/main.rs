@@ -1,8 +1,8 @@
 use std::net::{SocketAddr, UdpSocket};
 use std::thread;
 use std::env;
-use std::str::{self, FromStr};
 use std::process;
+use std::str;
 
 mod node;
 
@@ -24,7 +24,6 @@ fn decode_from_bytes(payload: Vec<u8>) -> String {
         .collect::<Vec<&str>>()[0];
     data.to_string()
 }
-
 
 fn run_bully_as_non_leader(mut blockchain: Vec<String>) {
 	// Let the OS to pick one addr + port for us
@@ -97,7 +96,7 @@ fn run_bully_thread(iamleader: bool) -> () {
 }
 
 fn usage() -> i32 {
-	println!("Usage: cargo r --bin node <id> <ip_address> ");
+	println!("Usage: cargo r --bin node <id> <ip_address> [--leader]");
 	return -1;
 }
 
@@ -105,24 +104,21 @@ fn usage() -> i32 {
 fn main() -> Result<(), ()> {
 	let args: Vec<String> = env::args().collect();
 
-
-	let iamleader: bool = args.len() > 1 && args[1] == "--leader";
-	let t = thread::spawn(move || run_bully_thread(iamleader));
-
-	t.join();
-
-	return Ok(());
-
-	let args: Vec<String> = env::args().collect();
-    if args.len() != 3 {
+    if args.len() != 4 {
         process::exit(usage());
     }
 
 	let id = &args[1];
 	let address = &args[2];
 
+	let iamleader: bool = args.len() > 3 && args[3] == "--leader";
+	let t = thread::spawn(move || run_bully_thread(iamleader));
+
     let mut node = node::Node::new(id.to_string(), address.to_string());
+
     node.run();
+
+	t.join().unwrap();
 
 	Ok(())
 }
