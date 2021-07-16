@@ -36,8 +36,13 @@ fn run_bully_as_leader(mut blockchain: Vec<String>) {
 		let mut buf = [0; 128];
 		let (size, from) = socket.recv_from(&mut buf).unwrap();
 
-		match str::from_utf8(&buf).unwrap() {
-			"register\n" => {
+        let msg = str::from_utf8(&buf)
+            .unwrap()
+            .split("\n")
+            .collect::<Vec<&str>>()[0];
+
+		match msg {
+			"register" => {
 				println!("Registrando nodo: {}", from);
 				if !&other_nodes.contains(&from) {
 					other_nodes.push(from);
