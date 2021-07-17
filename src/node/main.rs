@@ -13,14 +13,11 @@ fn usage() -> i32 {
 fn main() -> Result<(), ()> {
 
 	let args: Vec<String> = env::args().collect();
-    if args.len() != 3 {
+    if args.len() != 1 {
         process::exit(usage());
     }
 
-	let id = &args[1];
-	let address = &args[2];
-
-    let mut node = node::Node::new(id.to_string(), address.to_string());
+    let mut node = node::Node::new();
     node.run();
 
 	Ok(())
