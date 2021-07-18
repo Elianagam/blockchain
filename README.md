@@ -29,10 +29,10 @@ Nuestra implementacion:
 Como tenemos dos compnentes hay que especificar cual queremos buildear/correr, para eso se usa
 
 ```bash
-cargo run --bin coordinator
+cargo run --bin coordinator 
 
 # o
 
-cargo run --bin node
+cargo run --bin node <id> <ip addr> [--leader]
 ```
 
