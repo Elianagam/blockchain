@@ -104,7 +104,7 @@ fn usage() -> i32 {
 fn main() -> Result<(), ()> {
 	let args: Vec<String> = env::args().collect();
 
-    if args.len() != 3 {
+    if args.len() != 1 {
         process::exit(usage());
     }
 
@@ -114,7 +114,7 @@ fn main() -> Result<(), ()> {
 	let iamleader: bool = args.len() > 3 && args[3] == "--leader";
 	let t = thread::spawn(move || run_bully_thread(iamleader));
 
-    let mut node = node::Node::new(id.to_string(), address.to_string());
+    let mut node = node::Node::new();
 
     node.run();
 

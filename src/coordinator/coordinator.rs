@@ -7,16 +7,16 @@ use std::sync::Arc;
 use std_semaphore::Semaphore;
 use std::thread::{self};
 
+const CTOR_ADDR: &str = "127.0.0.1:8001";
 
 pub struct Coordinator {
     socket: TcpListener,
 }
 
-
 impl Coordinator {
-    pub fn new(ip: String) -> Coordinator {
+    pub fn new() -> Coordinator {
         Coordinator {
-            socket: TcpListener::bind(ip).unwrap(),
+            socket: TcpListener::bind(CTOR_ADDR).unwrap(),
         }
     }
 
@@ -25,8 +25,8 @@ impl Coordinator {
 
         for stream in self.socket.incoming() {
             let tcp_stream = stream.unwrap();
+            let id = tcp_stream.peer_addr().unwrap().port();
             let mut node = NodeAccepted::new(tcp_stream);
-            let id = node.id.to_string();
             println!("[COORDINATOR] Cliente conectado {}", id);
 
             let local_mutex = mutex.clone();

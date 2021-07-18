@@ -12,13 +12,12 @@ fn usage() -> i32 {
 
 fn main() -> Result<(), ()> {
 	let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
+    if args.len() != 1 {
         process::exit(usage());
     }
 
-    let ip = args[1].clone();
     let coordinator = thread::spawn(move || {
-    	let coordinator = coordinator::Coordinator::new(ip);
+    	let coordinator = coordinator::Coordinator::new();
     	coordinator.run();
 	});
 

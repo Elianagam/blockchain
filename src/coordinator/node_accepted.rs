@@ -5,20 +5,15 @@ use std::io::{BufReader,BufRead,Write};
 pub struct NodeAccepted {
     writer: TcpStream,
     reader: BufReader<TcpStream>,
-    pub id: String
 }
 
 
 impl NodeAccepted {
     pub fn new(stream: TcpStream) -> NodeAccepted {
         let writer = stream.try_clone().unwrap();
-        let mut reader = BufReader::new(stream);
+        let reader = BufReader::new(stream);
         
-        let mut id = String::new();
-        reader.read_line(&mut id).unwrap();
-        id = id.to_string().replace("\n", "");
-        
-        NodeAccepted{writer: writer, reader: reader, id: id}
+        NodeAccepted{writer: writer, reader: reader}
     }
 
     pub fn write(&mut self, message: String) {
