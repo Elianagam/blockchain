@@ -3,20 +3,25 @@ mod node_accepted;
 use node_accepted::NodeAccepted;
 
 use std::net::TcpListener;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std_semaphore::Semaphore;
-use std::thread::{self};
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
+const ACQUIRE_MSG: &str = "acquire\n";
+const RELEASE_MSG: &str = "release\n";
+const NEW_NODE_MSG: &str = "discover\n";
+const DISCONNECT_MSG: &str = "";
 
 pub struct Coordinator {
     socket: TcpListener,
+    current_leader: Arc<Mutex<Option<String>>>,
 }
 
 impl Coordinator {
     pub fn new() -> Coordinator {
         Coordinator {
             socket: TcpListener::bind(CTOR_ADDR).unwrap(),
+            current_leader: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -31,13 +36,15 @@ impl Coordinator {
 
             let local_mutex = mutex.clone();
 
-            thread::spawn(move || {
+            let current_leader = self.current_leader.clone();
+
+            std::thread::spawn(move || {
                 let mut mine = false;
 
                 loop {
                     let buffer = node.read();
                     match buffer.as_str() {
-                        "acquire\n" => {
+                        ACQUIRE_MSG => {
                             println!("[COORDINATOR] pide lock {}", id);
                             if !mine {
                                 local_mutex.acquire();
@@ -48,7 +55,7 @@ impl Coordinator {
                                 println!("[COORDINATOR] ERROR: ya lo tiene");
                             }
                         }
-                        "release\n" => {
+                        RELEASE_MSG => {
                             println!("[COORDINATOR] libera lock {}", id);
                             if mine {
                                 local_mutex.release();
@@ -57,10 +64,14 @@ impl Coordinator {
                                 println!("[COORDINATOR] ERROR: no lo tiene!")
                             }
                         }
-                        "" => {
-                          println!("[COORDINATOR] desconectado {}", id);
-                          break;
+                        DISCONNECT_MSG => {
+                            println!("[COORDINATOR] desconectado {}", id);
+                            break;
                         }
+                        NEW_NODE_MSG => match (*current_leader).lock().unwrap().clone() {
+                            Some(leader_id) => node.write(leader_id),
+                            None => {}
+                        },
                         _ => {
                             println!("[COORDINATOR] ERROR: mensaje desconocido de {}", id);
                             break;
