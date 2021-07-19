@@ -5,7 +5,7 @@ use std::thread;
 use std::process;
 
 fn usage() -> i32 {
-	println!("Usage: cargo r --bin coordinator <ip_address> ");
+	println!("Usage: cargo r --bin coordinator");
 	return -1;
 }
 

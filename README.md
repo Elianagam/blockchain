@@ -33,6 +33,6 @@ cargo run --bin coordinator
 
 # o
 
-cargo run --bin node <id> <ip addr> [--leader]
+cargo run --bin node [--leader]
 ```
 
