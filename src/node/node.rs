@@ -5,6 +5,8 @@ use std::thread;
 use std::time::Duration;
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
+const ACQUIRE_MSG: &str = "acquire\n";
+const RELEASE_MSG: &str = "release\n";
 
 pub struct Node {
     writer: TcpStream,
@@ -29,13 +31,13 @@ impl Node {
     }
 
     fn acquire(&mut self) {
-        self.writer.write_all("acquire\n".as_bytes()).unwrap();
+        self.writer.write_all(ACQUIRE_MSG.as_bytes()).unwrap();
         let mut buffer = String::new();
         self.reader.read_line(&mut buffer).unwrap();
         println!("Read {}", buffer);
     }
 
     fn release(&mut self) {
-        self.writer.write_all("release\n".as_bytes()).unwrap();
+        self.writer.write_all(RELEASE_MSG.as_bytes()).unwrap();
     }
 }
