@@ -3,7 +3,7 @@ use std::thread;
 use std::env;
 use std::process;
 use std::str;
-use std::sync::Arc;
+//use std::sync::Arc;
 
 
 #[path = "../utils/logger.rs"]
@@ -20,18 +20,17 @@ use logger::Logger;
 const LEADER_ADDR: &str = "127.0.0.1:8000";
 const DUMMY_MSG: &str = "testing";
 const REGISTER_MSG: &str = "register";
-const LOG_FILENAME: &str = "log_node.txt";
 const MESSAGE_LOGGER_ERROR: &str = "Unable to open logger file ";
 
 
-fn run_bully_as_non_leader(mut blockchain: Blockchain, logger: Arc<Logger>) {
+fn run_bully_as_non_leader(mut blockchain: Blockchain) {
     // Let the OS to pick one addr + port for us
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
+    std::thread::sleep(std::time::Duration::from_secs(5));
+    println!("Enviando mensaje {} al lider", DUMMY_MSG);
     socket.send_to(&encode_to_bytes(REGISTER_MSG), LEADER_ADDR).unwrap();
 
-    std::thread::sleep(std::time::Duration::from_secs(5));
-    logger.info(format!("Enviando mensaje {} al lider", DUMMY_MSG));
 
     socket.send_to(&encode_to_bytes(DUMMY_MSG), LEADER_ADDR).unwrap();
 
@@ -40,20 +39,19 @@ fn run_bully_as_non_leader(mut blockchain: Blockchain, logger: Arc<Logger>) {
         let (_, _) = socket.recv_from(&mut buf).unwrap();
 
         let msg = decode_from_bytes(buf.to_vec());
-        logger.info(format!("Recibido {}", &msg));
+        println!("Recibido {}", &msg);
 
         blockchain.add(Block{ data: msg });
     }
 
-    logger.info(format!("Blockchain final: {:?}", blockchain));
+    println!("Blockchain final: {:?}", blockchain);
 }
 
-fn run_bully_as_leader(mut blockchain: Blockchain, logger: Arc<Logger>) {
-    logger.info(format!("Soy el líder!"));
-
-    let mut other_nodes: Vec<SocketAddr> = vec!();
-
+fn run_bully_as_leader(mut blockchain: Blockchain) {
     let socket = UdpSocket::bind(LEADER_ADDR).unwrap();
+
+    println!("Soy el líder!");
+    let mut other_nodes: Vec<SocketAddr> = vec!();
 
     let mut propagated_msgs = 0;
 
@@ -67,13 +65,13 @@ fn run_bully_as_leader(mut blockchain: Blockchain, logger: Arc<Logger>) {
 
         match msg.as_str() {
             REGISTER_MSG => {
-                logger.info(format!("Registrando nodo: {}", from));
+                println!("Registrando nodo: {}", from);
                 if !&other_nodes.contains(&from) {
                     other_nodes.push(from);
                 }
             },
             msg => {
-                logger.info(format!("Propagando cambios {:?} al resto de los nodos", msg));
+                println!("Propagando cambios {:?} al resto de los nodos", msg);
                 for node in &other_nodes {
                     socket.send_to(&encode_to_bytes(msg), node).unwrap();
                 }
@@ -87,17 +85,9 @@ fn run_bully_as_leader(mut blockchain: Blockchain, logger: Arc<Logger>) {
 fn run_bully_thread(iamleader: bool) -> () { 
     let blockchain = Blockchain::new();
 
-    let logger = match Logger::new(LOG_FILENAME) {
-		Ok(logger) => Arc::new(logger),
-		Err(e) => {
-			println!("{} {:?}: {:?}", MESSAGE_LOGGER_ERROR, LOG_FILENAME, e);
-            return ()
-		}
-	};
-
     match iamleader {
-        true => run_bully_as_leader(blockchain, logger.clone()),
-        false => run_bully_as_non_leader(blockchain, logger.clone())
+        true => run_bully_as_leader(blockchain),
+        false => run_bully_as_non_leader(blockchain)
     }
 }
 
@@ -116,9 +106,9 @@ fn main() -> Result<(), ()> {
 
 
     let iamleader: bool = args.len() > 1 && args[1] == "--leader";
+    let mut node = node::Node::new();
     let t = thread::spawn(move || run_bully_thread(iamleader));
 
-    let mut node = node::Node::new();
 
     node.run();
 
