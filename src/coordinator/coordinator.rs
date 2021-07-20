@@ -1,10 +1,7 @@
 #[path = "node_accepted.rs"]
 mod node_accepted;
 use node_accepted::NodeAccepted;
-
-#[path = "../utils/logger.rs"]
-mod logger;
-use logger::Logger;
+use super::logger::Logger;
 
 use std::net::TcpListener;
 use std::sync::Arc;
@@ -12,9 +9,6 @@ use std_semaphore::Semaphore;
 use std::thread::{self};
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
-const LOG_FILENAME: &str = "log.txt";
-const MESSAGE_LOGGER_ERROR: &str = "Unable to open logger file ";
-const MESSAGE_OPEN_FILE_ERROR: &str = "Unable to open file";
 
 pub struct Coordinator {
     socket: TcpListener,
@@ -22,14 +16,7 @@ pub struct Coordinator {
 }
 
 impl Coordinator {
-    pub fn new() -> Coordinator {
-        let logger = match Logger::new(LOG_FILENAME) {
-            Ok(logger) => Arc::new(logger),
-            Err(e) => {
-                println!("{} {:?}: {}", MESSAGE_LOGGER_ERROR, LOG_FILENAME, e);
-            }
-        };
-
+    pub fn new(logger: Arc<Logger>) -> Coordinator {
         Coordinator {
             socket: TcpListener::bind(CTOR_ADDR).unwrap(),
             logger: logger.clone()
