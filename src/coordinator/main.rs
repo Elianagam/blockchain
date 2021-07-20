@@ -10,7 +10,7 @@ use std::thread;
 use std::process;
 use std::sync::Arc;
 
-const LOG_FILENAME: &str = "log.txt";
+const LOG_FILENAME: &str = "log_coordinator.txt";
 const MESSAGE_LOGGER_ERROR: &str = "Unable to open logger file ";
 
 fn usage() -> i32 {
