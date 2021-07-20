@@ -2,21 +2,37 @@
 mod node_accepted;
 use node_accepted::NodeAccepted;
 
+#[path = "../utils/logger.rs"]
+mod logger;
+use logger::Logger;
+
 use std::net::TcpListener;
 use std::sync::Arc;
 use std_semaphore::Semaphore;
 use std::thread::{self};
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
+const LOG_FILENAME: &str = "log.txt";
+const MESSAGE_LOGGER_ERROR: &str = "Unable to open logger file ";
+const MESSAGE_OPEN_FILE_ERROR: &str = "Unable to open file";
 
 pub struct Coordinator {
     socket: TcpListener,
+    logger: Arc<Logger>
 }
 
 impl Coordinator {
     pub fn new() -> Coordinator {
+        let logger = match Logger::new(LOG_FILENAME) {
+            Ok(logger) => Arc::new(logger),
+            Err(e) => {
+                println!("{} {:?}: {}", MESSAGE_LOGGER_ERROR, LOG_FILENAME, e);
+            }
+        };
+
         Coordinator {
             socket: TcpListener::bind(CTOR_ADDR).unwrap(),
+            logger: logger.clone()
         }
     }
 
@@ -27,7 +43,8 @@ impl Coordinator {
             let tcp_stream = stream.unwrap();
             let id = tcp_stream.peer_addr().unwrap().port();
             let mut node = NodeAccepted::new(tcp_stream);
-            println!("[COORDINATOR] Cliente conectado {}", id);
+
+            self.logger.info(format!("[COORDINATOR] Cliente conectado {}", id));
 
             let local_mutex = mutex.clone();
 
