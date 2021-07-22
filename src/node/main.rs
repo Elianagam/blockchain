@@ -4,7 +4,6 @@ use std::process;
 use std::thread;
 
 mod blockchain;
-mod encoder;
 mod node;
 
 mod node_leader;
