@@ -3,22 +3,17 @@ use std::net::{SocketAddr, UdpSocket};
 use std::process;
 use std::str;
 use std::thread;
-//use std::sync::Arc;
 
 mod blockchain;
 mod encoder;
-#[path = "../utils/logger.rs"]
-mod logger;
 mod node;
 use encoder::*;
 
 use blockchain::{Block, Blockchain};
-use logger::Logger;
 
 const LEADER_ADDR: &str = "127.0.0.1:8000";
 const DUMMY_MSG: &str = "testing";
 const REGISTER_MSG: &str = "register";
-const MESSAGE_LOGGER_ERROR: &str = "Unable to open logger file ";
 
 fn run_bully_as_non_leader(mut blockchain: Blockchain) {
     // Let the OS to pick one addr + port for us
