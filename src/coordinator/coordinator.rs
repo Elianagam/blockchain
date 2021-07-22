@@ -1,22 +1,25 @@
 #[path = "node_accepted.rs"]
 mod node_accepted;
+use super::logger::Logger;
 use node_accepted::NodeAccepted;
 
 use std::net::TcpListener;
 use std::sync::Arc;
-use std_semaphore::Semaphore;
 use std::thread::{self};
+use std_semaphore::Semaphore;
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
 
 pub struct Coordinator {
     socket: TcpListener,
+    logger: Arc<Logger>,
 }
 
 impl Coordinator {
-    pub fn new() -> Coordinator {
+    pub fn new(logger: Arc<Logger>) -> Coordinator {
         Coordinator {
             socket: TcpListener::bind(CTOR_ADDR).unwrap(),
+            logger: logger.clone(),
         }
     }
 
@@ -27,7 +30,9 @@ impl Coordinator {
             let tcp_stream = stream.unwrap();
             let id = tcp_stream.peer_addr().unwrap().port();
             let mut node = NodeAccepted::new(tcp_stream);
-            println!("[COORDINATOR] Cliente conectado {}", id);
+
+            self.logger
+                .info(format!("[COORDINATOR] Cliente conectado {}", id));
 
             let local_mutex = mutex.clone();
 
@@ -58,8 +63,8 @@ impl Coordinator {
                             }
                         }
                         "" => {
-                          println!("[COORDINATOR] desconectado {}", id);
-                          break;
+                            println!("[COORDINATOR] desconectado {}", id);
+                            break;
                         }
                         _ => {
                             println!("[COORDINATOR] ERROR: mensaje desconocido de {}", id);

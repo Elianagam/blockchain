@@ -1,7 +1,7 @@
-use std::time::Duration;
-use std::io::{BufReader,BufRead,Write};
+use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::thread;
+use std::time::Duration;
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
 
@@ -33,7 +33,6 @@ impl Node {
         let mut buffer = String::new();
         self.reader.read_line(&mut buffer).unwrap();
         println!("Read {}", buffer);
-
     }
 
     fn release(&mut self) {

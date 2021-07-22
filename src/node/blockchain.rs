@@ -1,19 +1,17 @@
 use std::fmt::Debug;
 
-pub struct Block { 
+pub struct Block {
     pub data: String,
 }
 
 #[derive(Debug)]
-pub struct Blockchain { 
-    blocks: Vec<Block>
+pub struct Blockchain {
+    blocks: Vec<Block>,
 }
 
 impl Blockchain {
     pub fn new() -> Self {
-        Self {
-            blocks: vec!(),
-        }
+        Self { blocks: vec![] }
     }
 
     pub fn add(&mut self, new_block: Block) {
