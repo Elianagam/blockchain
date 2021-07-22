@@ -5,6 +5,7 @@ use std::thread;
 
 mod blockchain;
 mod node;
+mod encoder;
 
 mod node_leader;
 use node_leader::*;
