@@ -1,6 +1,5 @@
-use crate::encoder::encode_to_bytes;
+use crate::encoder::Encoder;
 
-use crate::encoder::decode_from_bytes;
 use std::str;
 
 use crate::blockchain::{Block, Blockchain};
@@ -17,18 +16,18 @@ pub fn run_bully_as_non_leader(mut blockchain: Blockchain) {
     std::thread::sleep(std::time::Duration::from_secs(5));
     println!("Enviando mensaje {} al lider", DUMMY_MSG);
     socket
-        .send_to(&encode_to_bytes(REGISTER_MSG), LEADER_ADDR)
+        .send_to(&Encoder::encode_to_bytes(REGISTER_MSG), LEADER_ADDR)
         .unwrap();
 
     socket
-        .send_to(&encode_to_bytes(DUMMY_MSG), LEADER_ADDR)
+        .send_to(&Encoder::encode_to_bytes(DUMMY_MSG), LEADER_ADDR)
         .unwrap();
 
     for _ in 0..3 {
         let mut buf = [0; 128];
         let (_, _) = socket.recv_from(&mut buf).unwrap();
 
-        let msg = decode_from_bytes(buf.to_vec());
+        let msg = Encoder::decode_from_bytes(buf.to_vec());
         println!("Recibido {}", &msg);
 
         blockchain.add(Block { data: msg });

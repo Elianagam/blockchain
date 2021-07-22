@@ -24,7 +24,7 @@ fn run_bully_thread(iamleader: bool) -> () {
 }
 
 fn usage() -> i32 {
-    println!("Usage: cargo r --bin node [--leader]");
+    println!("Usage: cargo r --bin node [leader]");
     return -1;
 }
 
@@ -35,7 +35,7 @@ fn main() -> Result<(), ()> {
         process::exit(usage());
     }
 
-    let iamleader: bool = args.len() > 1 && args[1] == "--leader";
+    let iamleader: bool = args.len() > 1 && args[1] == "leader";
     let mut node = node::Node::new();
     let t = thread::spawn(move || run_bully_thread(iamleader));
 
