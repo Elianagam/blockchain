@@ -42,7 +42,6 @@ pub fn run_bully_as_leader(mut blockchain: Blockchain) {
         if propagated_msgs == 10 {
             break;
         }
-        println!("{:?}", other_nodes);
 
         match msg.as_str() {
             REGISTER_MSG => {

@@ -47,10 +47,8 @@ impl Coordinator {
                             if !mine {
                                 local_mutex.acquire();
                                 mine = true;
-                                node.write("OK\n".to_string());
+                                node.write("OK".to_string());
                                 println!("[COORDINATOR] le dí lock a {}", id);
-                            } else {
-                                println!("[COORDINATOR] ERROR: ya lo tiene");
                             }
                         }
                         "release\n" => {
@@ -58,8 +56,6 @@ impl Coordinator {
                             if mine {
                                 local_mutex.release();
                                 mine = false;
-                            } else {
-                                println!("[COORDINATOR] ERROR: no lo tiene!")
                             }
                         }
                         "" => {
@@ -67,7 +63,6 @@ impl Coordinator {
                             break;
                         }
                         _ => {
-                            println!("[COORDINATOR] ERROR: mensaje desconocido de {}", id);
                             break;
                         }
                     }
