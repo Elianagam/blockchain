@@ -1,9 +1,11 @@
 #[path = "node_accepted.rs"]
 mod node_accepted;
+use super::logger::Logger;
 use node_accepted::NodeAccepted;
 
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
+use std::thread::{self};
 use std_semaphore::Semaphore;
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
@@ -15,14 +17,14 @@ const DISCONNECT_MSG: &str = "";
 pub struct Coordinator {
     socket: TcpListener,
     current_leader: Arc<Mutex<Option<String>>>,
+    logger: Arc<Logger>,
 }
 
 impl Coordinator {
-    pub fn new() -> Coordinator {
-        Coordinator {
-            socket: TcpListener::bind(CTOR_ADDR).unwrap(),
-            current_leader: Arc::new(Mutex::new(None)),
-        }
+    pub fn new(logger: Arc<Logger>) -> Coordinator {
+        let socket = TcpListener::bind(CTOR_ADDR).unwrap();
+        let current_leader = Arc::new(Mutex::new(None));
+        Coordinator { socket, current_leader, logger: logger.clone() }
     }
 
     pub fn run(&self) {
@@ -32,7 +34,9 @@ impl Coordinator {
             let tcp_stream = stream.unwrap();
             let id = tcp_stream.peer_addr().unwrap().port();
             let mut node = NodeAccepted::new(tcp_stream);
-            println!("[COORDINATOR] Cliente conectado {}", id);
+
+            self.logger
+                .info(format!("[COORDINATOR] Cliente conectado {}", id));
 
             let local_mutex = mutex.clone();
 
@@ -49,10 +53,8 @@ impl Coordinator {
                             if !mine {
                                 local_mutex.acquire();
                                 mine = true;
-                                node.write("OK\n".to_string());
+                                node.write("OK".to_string());
                                 println!("[COORDINATOR] le dí lock a {}", id);
-                            } else {
-                                println!("[COORDINATOR] ERROR: ya lo tiene");
                             }
                         }
                         RELEASE_MSG => {
@@ -60,8 +62,6 @@ impl Coordinator {
                             if mine {
                                 local_mutex.release();
                                 mine = false;
-                            } else {
-                                println!("[COORDINATOR] ERROR: no lo tiene!")
                             }
                         }
                         DISCONNECT_MSG => {
@@ -73,7 +73,6 @@ impl Coordinator {
                             None => {}
                         },
                         _ => {
-                            println!("[COORDINATOR] ERROR: mensaje desconocido de {}", id);
                             break;
                         }
                     }

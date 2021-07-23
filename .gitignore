@@ -1,1 +1,4 @@
 /target
+log.txt
+log_node*
+log_coordinator.txt
