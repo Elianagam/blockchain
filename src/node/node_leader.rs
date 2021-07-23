@@ -4,7 +4,6 @@ use std::str;
 
 use crate::blockchain::{Block, Blockchain};
 
-const LEADER_ADDR: &str = "127.0.0.1:8000";
 const REGISTER_MSG: &str = "register";
 const NEW_NODE: &str = "new_node";
 const END: &str = "-";

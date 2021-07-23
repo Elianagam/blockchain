@@ -1,10 +1,11 @@
 #[path = "../utils/logger.rs"]
 mod logger;
-use logger::Logger;
 
 mod coordinator;
+mod node_accepted;
 
 use coordinator::Coordinator;
+use logger::Logger;
 
 use std::env;
 use std::process;

@@ -10,6 +10,10 @@ mod encoder;
 mod node;
 mod node_leader;
 mod node_non_leader;
+mod messages;
+
+#[path = "../utils/logger.rs"]
+mod logger;
 
 use blockchain::Blockchain;
 use node_leader::run_bully_as_leader;

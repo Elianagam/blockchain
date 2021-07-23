@@ -1,10 +1,9 @@
-#[path = "node_accepted.rs"]
-mod node_accepted;
-use super::logger::Logger;
-use node_accepted::NodeAccepted;
+use crate::node_accepted::NodeAccepted;
+use crate::logger::Logger;
 
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
+
 use std_semaphore::Semaphore;
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";

@@ -5,11 +5,9 @@ use std::thread;
 use std::time::Duration;
 
 use crate::encoder::Encoder;
+use crate::messages::{ACQUIRE_MSG, RELEASE_MSG, NEW_NODE_MSG};
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
-const ACQUIRE_MSG: &str = "acquire\n";
-const RELEASE_MSG: &str = "release\n";
-const NEW_NODE_MSG: &str = "discover\n";
 
 pub struct Node {
     pub writer: TcpStream,
