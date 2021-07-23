@@ -1,6 +1,9 @@
 #[path = "../utils/logger.rs"]
 mod logger;
 
+#[path = "../utils/messages.rs"]
+mod messages;
+
 mod coordinator;
 mod node_accepted;
 

@@ -1,12 +1,9 @@
 use crate::encoder::Encoder;
+use crate::messages::{REGISTER_MSG, NEW_NODE, END};
+
 use std::net::{SocketAddr, UdpSocket};
-use std::str;
 
 use crate::blockchain::{Block, Blockchain};
-
-const REGISTER_MSG: &str = "register";
-const NEW_NODE: &str = "new_node";
-const END: &str = "-";
 
 fn send_all_addr(other_nodes: Vec<SocketAddr>, socket: UdpSocket) {
     for node_conected in &other_nodes {

@@ -1,5 +1,6 @@
 use crate::node_accepted::NodeAccepted;
 use crate::logger::Logger;
+use crate::messages::{ACQUIRE_MSG, RELEASE_MSG, DISCOVER_MSG, DISCONNECT_MSG};
 
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
@@ -7,10 +8,6 @@ use std::sync::{Arc, Mutex};
 use std_semaphore::Semaphore;
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
-const ACQUIRE_MSG: &str = "acquire\n";
-const RELEASE_MSG: &str = "release\n";
-const DISCOVER_MSG: &str = "discover\n";
-const DISCONNECT_MSG: &str = "";
 
 pub struct Coordinator {
     socket: TcpListener,

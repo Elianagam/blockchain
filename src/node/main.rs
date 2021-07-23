@@ -1,19 +1,21 @@
-use std::env;
-use std::process;
-use std::thread;
-use std::sync::{Mutex, Arc};
-use std::time::Duration;
-use std::net::UdpSocket;
+#[path = "../utils/logger.rs"]
+mod logger;
+
+#[path = "../utils/messages.rs"]
+mod messages;
 
 mod blockchain;
 mod encoder;
 mod node;
 mod node_leader;
 mod node_non_leader;
-mod messages;
 
-#[path = "../utils/logger.rs"]
-mod logger;
+use std::env;
+use std::process;
+use std::thread;
+use std::sync::{Mutex, Arc};
+use std::time::Duration;
+use std::net::UdpSocket;
 
 use blockchain::Blockchain;
 use node_leader::run_bully_as_leader;
