@@ -5,8 +5,7 @@ use std::str;
 use crate::blockchain::{Block, Blockchain};
 use std::net::UdpSocket;
 
-const LEADER_ADDR: &str = "127.0.0.1:8000";
-const DUMMY_MSG: &str = "testing";
+const DUMMY_MSG: &str = "ping";
 const REGISTER_MSG: &str = "register";
 const NEW_NODE: &str = "new_node";
 const END: &str = "-";
@@ -26,19 +25,17 @@ fn recv_all_addr(mut other_nodes: Vec<String>, socket: UdpSocket) -> Vec<String>
     other_nodes
 }
 
-pub fn run_bully_as_non_leader(mut blockchain: Blockchain) {
+pub fn run_bully_as_non_leader(socket: UdpSocket, mut blockchain: Blockchain, leader_addr: String) {
     // Let the OS to pick one addr + port for us
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let mut other_nodes: Vec<String> = vec![];
 
-    std::thread::sleep(std::time::Duration::from_secs(5));
     println!("Enviando mensaje {} al lider", DUMMY_MSG);
     socket
-        .send_to(&Encoder::encode_to_bytes(REGISTER_MSG), LEADER_ADDR)
+        .send_to(&Encoder::encode_to_bytes(REGISTER_MSG), leader_addr.as_str())
         .unwrap();
 
     socket
-        .send_to(&Encoder::encode_to_bytes(DUMMY_MSG), LEADER_ADDR)
+        .send_to(&Encoder::encode_to_bytes(DUMMY_MSG), leader_addr.as_str())
         .unwrap();
 
     for _ in 0..10 {

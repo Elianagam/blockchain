@@ -26,9 +26,7 @@ fn send_all_addr(other_nodes: Vec<SocketAddr>, socket: UdpSocket) {
     }
 }
 
-pub fn run_bully_as_leader(mut blockchain: Blockchain) {
-    let socket = UdpSocket::bind(LEADER_ADDR).unwrap();
-
+pub fn run_bully_as_leader(socket: UdpSocket, mut blockchain: Blockchain) {
     println!("Soy el líder!");
     let mut other_nodes: Vec<SocketAddr> = vec![];
     let mut propagated_msgs = 0;

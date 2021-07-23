@@ -5,13 +5,12 @@ use node_accepted::NodeAccepted;
 
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
-use std::thread::{self};
 use std_semaphore::Semaphore;
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
 const ACQUIRE_MSG: &str = "acquire\n";
 const RELEASE_MSG: &str = "release\n";
-const NEW_NODE_MSG: &str = "discover\n";
+const DISCOVER_MSG: &str = "discover\n";
 const DISCONNECT_MSG: &str = "";
 
 pub struct Coordinator {
@@ -58,20 +57,36 @@ impl Coordinator {
                             }
                         }
                         RELEASE_MSG => {
-                            println!("[COORDINATOR] libera lock {}", id);
+                            println!("[COORDINATOR] Libera lock {}", id);
                             if mine {
                                 local_mutex.release();
                                 mine = false;
                             }
                         }
+                        DISCOVER_MSG => {
+                            println!("[COORDINATOR] Nuevo nodo conectado");
+                            let new_node_bully_addr = node.read();
+                            let tmp = (*current_leader).lock().unwrap().clone();
+                            match tmp {
+                                // Si tenemos un lider seteado devolvemos su IP
+                                Some(current_leader_addr) => {
+                                    println!("[COORDINATOR] Lider encontrado, devolviendolo");
+                                    node.write(format!("{}\n", current_leader_addr.clone()));
+                                },
+                                None => {
+                                    println!("[COORDINATOR] Seteando como lider a: {:?}", new_node_bully_addr);
+                                    *current_leader.lock().unwrap() = Some(new_node_bully_addr.clone());
+
+                                    // Hacemos un echo de la IP que nos pasaron, de esta forma
+                                    // el nodo puede saber que se lo asigno como lider.
+                                    node.write(format!("{}\n", new_node_bully_addr));
+                                }
+                            }
+                        }
                         DISCONNECT_MSG => {
-                            println!("[COORDINATOR] desconectado {}", id);
+                            println!("[COORDINATOR] Desconectado {}", id);
                             break;
                         }
-                        NEW_NODE_MSG => match (*current_leader).lock().unwrap().clone() {
-                            Some(leader_id) => node.write(leader_id),
-                            None => {}
-                        },
                         _ => {
                             break;
                         }

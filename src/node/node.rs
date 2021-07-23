@@ -4,25 +4,30 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use crate::encoder::Encoder;
+
 const CTOR_ADDR: &str = "127.0.0.1:8001";
 const ACQUIRE_MSG: &str = "acquire\n";
 const RELEASE_MSG: &str = "release\n";
+const NEW_NODE_MSG: &str = "discover\n";
 
 pub struct Node {
-    writer: TcpStream,
-    reader: BufReader<TcpStream>,
-    leader_addr: Arc<Mutex<Option<String>>>,
+    pub writer: TcpStream,
+    pub reader: BufReader<TcpStream>,
+    pub leader_addr: Arc<Mutex<Option<String>>>,
+    pub bully_addr: String,
 }
 
 impl Node {
-    pub fn new(leader_addr: Arc<Mutex<Option<String>>>) -> Self {
+    pub fn new(bully_addr: String, leader_addr: Arc<Mutex<Option<String>>>) -> Self {
         let stream = TcpStream::connect(CTOR_ADDR).unwrap();
         let writer = stream.try_clone().unwrap();
         let reader = BufReader::new(stream);
-        Node { writer, reader, leader_addr }
+        Node { writer, reader, leader_addr, bully_addr }
     }
 
     pub fn run(&mut self) {
+        self.fetch_leader_addr();
         for _ in 1..10 {
             self.acquire();
             thread::sleep(Duration::from_millis(1000));
@@ -39,5 +44,20 @@ impl Node {
 
     fn release(&mut self) {
         self.writer.write_all(RELEASE_MSG.as_bytes()).unwrap();
+    }
+
+    fn fetch_leader_addr(&mut self) {
+        // Pregunta al coordinador la IP del lider actual, si recibimos 
+        // nuestra IP entonces somos nosotros.
+        println!("Enviando mensaje de discovery");
+
+        self.writer.write_all(NEW_NODE_MSG.as_bytes()).unwrap();
+        self.writer.write_all(&Encoder::encode_to_bytes(self.bully_addr.as_str())).unwrap();
+
+        let mut buffer = String::new();
+        self.reader.read_line(&mut buffer).unwrap();
+        let leader_ip = buffer.split('\n').collect::<Vec<&str>>()[0].to_string();
+
+        (*self.leader_addr.lock().unwrap()) = Some(leader_ip);
     }
 }
