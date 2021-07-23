@@ -11,10 +11,7 @@ impl NodeAccepted {
         let writer = stream.try_clone().unwrap();
         let reader = BufReader::new(stream);
 
-        NodeAccepted {
-            writer: writer,
-            reader: reader,
-        }
+        NodeAccepted { writer, reader }
     }
 
     pub fn write(&mut self, message: String) {

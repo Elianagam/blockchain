@@ -1,15 +1,8 @@
+use crate::messages::{PING_MSG, REGISTER_MSG, NEW_NODE, END};
 use crate::encoder::Encoder;
-
-use std::str;
-
 use crate::blockchain::{Block, Blockchain};
-use std::net::UdpSocket;
 
-const LEADER_ADDR: &str = "127.0.0.1:8000";
-const DUMMY_MSG: &str = "testing";
-const REGISTER_MSG: &str = "register";
-const NEW_NODE: &str = "new_node";
-const END: &str = "-";
+use std::net::UdpSocket;
 
 fn recv_all_addr(mut other_nodes: Vec<String>, socket: UdpSocket) -> Vec<String> {
     loop {
@@ -26,19 +19,16 @@ fn recv_all_addr(mut other_nodes: Vec<String>, socket: UdpSocket) -> Vec<String>
     other_nodes
 }
 
-pub fn run_bully_as_non_leader(mut blockchain: Blockchain) {
-    // Let the OS to pick one addr + port for us
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+pub fn run_bully_as_non_leader(socket: UdpSocket, mut blockchain: Blockchain, leader_addr: String) {
     let mut other_nodes: Vec<String> = vec![];
 
-    std::thread::sleep(std::time::Duration::from_secs(5));
-    println!("Enviando mensaje {} al lider", DUMMY_MSG);
+    println!("Enviando mensaje {} al lider", PING_MSG);
     socket
-        .send_to(&Encoder::encode_to_bytes(REGISTER_MSG), LEADER_ADDR)
+        .send_to(&Encoder::encode_to_bytes(REGISTER_MSG), leader_addr.as_str())
         .unwrap();
 
     socket
-        .send_to(&Encoder::encode_to_bytes(DUMMY_MSG), LEADER_ADDR)
+        .send_to(&Encoder::encode_to_bytes(PING_MSG), leader_addr.as_str())
         .unwrap();
 
     for _ in 0..10 {

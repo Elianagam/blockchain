@@ -1,14 +1,19 @@
 #[path = "../utils/logger.rs"]
 mod logger;
-use logger::Logger;
+
+#[path = "../utils/messages.rs"]
+mod messages;
 
 mod coordinator;
+mod node_accepted;
+
 use coordinator::Coordinator;
+use logger::Logger;
 
 use std::env;
 use std::process;
-use std::sync::Arc;
 use std::thread;
+use std::sync::Arc;
 
 const LOG_FILENAME: &str = "log_coordinator.txt";
 const MESSAGE_LOGGER_ERROR: &str = "Unable to open logger file ";
@@ -32,7 +37,7 @@ fn main() -> Result<(), ()> {
     };
 
     let coordinator = thread::spawn(move || {
-        let coordinator = Coordinator::new(logger.clone());
+        let coordinator = Coordinator::new(logger);
         coordinator.run();
     });
 
