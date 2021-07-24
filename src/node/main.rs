@@ -26,7 +26,6 @@ fn run_bully_thread(bully_sock: UdpSocket, leader_addr: Arc<Mutex<Option<String>
 
     // FIXME: usar condvars
     while leader_addr.lock().unwrap().is_none() {
-        println!("Checking for leader_addr");
         std::thread::sleep(Duration::from_secs(1));
     }
 
@@ -41,14 +40,14 @@ fn run_bully_thread(bully_sock: UdpSocket, leader_addr: Arc<Mutex<Option<String>
 }
 
 fn usage() -> i32 {
-    println!("Usage: cargo r --bin node [leader]");
+    println!("Usage: cargo r --bin node");
     return -1;
 }
 
 fn main() -> Result<(), ()> {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() > 2 {
+    if args.len() > 1 {
         process::exit(usage());
     }
 
@@ -60,7 +59,6 @@ fn main() -> Result<(), ()> {
 
     let leader = leader_addr.clone();
 
-    //let iamleader: bool = args.len() > 1 && args[1] == "--leader";
     let t = thread::spawn(move || run_bully_thread(bully_sock, leader));
 
     let mut node = node::Node::new(bully_sock_addr, leader_addr.clone());

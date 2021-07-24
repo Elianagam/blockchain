@@ -11,6 +11,10 @@ fn send_all_addr(other_nodes: Vec<SocketAddr>, socket: UdpSocket) {
             .send_to(&Encoder::encode_to_bytes(NEW_NODE), node_conected)
             .unwrap();
         for node_addr in &other_nodes {
+            if node_addr == node_conected {
+                // No queremos mandar la propia IP a cada nodo
+                continue;
+            }
             let addr = format!("{}", node_addr);
             socket
                 .send_to(&Encoder::encode_to_bytes(&addr), node_conected)
