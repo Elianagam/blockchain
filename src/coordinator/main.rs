@@ -15,6 +15,7 @@ use std::process;
 use std::thread;
 use std::sync::Arc;
 
+
 const LOG_FILENAME: &str = "log_coordinator.txt";
 const MESSAGE_LOGGER_ERROR: &str = "Unable to open logger file ";
 
