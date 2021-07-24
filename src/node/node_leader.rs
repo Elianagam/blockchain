@@ -45,8 +45,10 @@ pub fn run_bully_as_leader(socket: UdpSocket, mut blockchain: Blockchain) {
                     send_all_addr(other_nodes.clone(), socket.try_clone().unwrap());
                 }
             }
-            NEW_NODE => {
-                // TODO: SEND BLOCKCHAIN
+            "close\n" => {
+                other_nodes.retain(|&x| x != from);
+                send_all_addr(other_nodes.clone(), socket.try_clone().unwrap());
+                println!("{:?}", other_nodes);
             }
             msg => {
                 println!("Propagando cambios {:?} al resto de los nodos", msg);

@@ -3,7 +3,8 @@ use crate::encoder::Encoder;
 use crate::blockchain::{Block, Blockchain};
 
 use std::net::UdpSocket;
-use std::io::{self, Read};
+use std::process;
+use std::io::{self, BufRead};
 
 fn recv_all_addr(mut other_nodes: Vec<String>, socket: UdpSocket) -> Vec<String> {
     loop {
@@ -20,6 +21,14 @@ fn recv_all_addr(mut other_nodes: Vec<String>, socket: UdpSocket) -> Vec<String>
     other_nodes
 }
 
+fn read_stdin() -> String {
+    println!("Ingresar dato a blockchain: ");
+    let stdin = io::stdin();
+    let mut iterator = stdin.lock().lines();
+    let line = iterator.next().unwrap().unwrap();
+    line
+}
+
 pub fn run_bully_as_non_leader(socket: UdpSocket, mut blockchain: Blockchain, leader_addr: String) {
     let mut other_nodes: Vec<String> = vec![];
 
@@ -27,33 +36,31 @@ pub fn run_bully_as_non_leader(socket: UdpSocket, mut blockchain: Blockchain, le
     socket
         .send_to(&Encoder::encode_to_bytes(REGISTER_MSG), leader_addr.as_str())
         .unwrap();
-
+    socket
+        .send_to(&Encoder::encode_to_bytes(PING_MSG), leader_addr.as_str())
+        .unwrap();
     loop {
         let mut buf = [0; 128];
         let (_, _) = socket.recv_from(&mut buf).unwrap();
         let msg = Encoder::decode_from_bytes(buf.to_vec());
+        
         match msg.as_str() {
             NEW_NODE => {
                 other_nodes = recv_all_addr(other_nodes.clone(), socket.try_clone().unwrap());
                 //println!("{:?}", other_nodes);
             }
-            "" => {
+            "close" => { 
                 break;
             }
             msg => {
                 println!("Recibido {}", &msg);
                 blockchain.add(Block { data: msg.to_string() });
-                println!("{}", blockchain);
+                socket
+                    .send_to(&Encoder::encode_to_bytes(&read_stdin()), leader_addr.as_str())
+                    .unwrap();
             }
         }
-
-        println!("Ingresar dato a blockchain: ");
-        let mut buffer = String::new();
-        io::stdin().read_to_string(&mut buffer).unwrap();
-
-        socket
-            .send_to(&Encoder::encode_to_bytes(&buffer), leader_addr.as_str())
-            .unwrap();
     }
-    println!("Blockchain final:\n\t{}", blockchain);
+    println!("{}\nNodo Desconectado...", blockchain);
+    process::exit(-1);
 }
