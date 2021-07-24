@@ -42,10 +42,11 @@ pub fn run_bully_as_non_leader(socket: UdpSocket, mut blockchain: Blockchain, le
             other_nodes = recv_all_addr(other_nodes.clone(), socket.try_clone().unwrap());
         } else {
             println!("Recibido {}", &msg);
+            blockchain.add(Block { data: msg });
+            println!("{}", blockchain);
         }
-
-        blockchain.add(Block { data: msg });
     }
 
-    println!("Blockchain final: {:?}", blockchain);
+    println!("Blockchain final:\n\t{}", blockchain);
+    
 }
