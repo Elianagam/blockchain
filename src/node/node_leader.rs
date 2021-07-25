@@ -2,6 +2,7 @@ use crate::encoder::Encoder;
 use crate::messages::{REGISTER_MSG, NEW_NODE, END, BLOCKCHAIN_MSG};
 
 use std::net::{SocketAddr, UdpSocket};
+use std::sync::{Mutex, Arc};
 
 use crate::blockchain::{Block, Blockchain};
 
@@ -40,7 +41,7 @@ fn send_blockchain(blockchain: Blockchain, from: SocketAddr,socket: UdpSocket) {
         .unwrap();
 }
 
-pub fn run_bully_as_leader(socket: UdpSocket, mut blockchain: Blockchain) {
+pub fn run_bully_as_leader(socket: UdpSocket, mut blockchain: Blockchain, stdin_buf: Arc<Mutex<Option<String>>>) {
     println!("Soy el líder!");
     let mut other_nodes: Vec<SocketAddr> = vec![];
     let mut propagated_msgs = 0;
