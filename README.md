@@ -35,6 +35,6 @@ cargo run --bin coordinator
 
 **Node**
 ```
-cargo run --bin node [leader]
+cargo run --bin node
 ```
 

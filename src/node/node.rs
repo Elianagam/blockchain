@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use crate::blockchain::{Block, Blockchain};
 use crate::encoder::Encoder;
-use crate::messages::{BLOCKCHAIN, CLOSE, END, NEW_NODE, NEW_NODE_MSG, PING_MSG, REGISTER_MSG};
+use crate::messages::{BLOCKCHAIN, CLOSE, END, NEW_NODE, DISCOVER_MSG, REGISTER_MSG};
 use std::net::{SocketAddr, UdpSocket};
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
@@ -91,9 +91,6 @@ impl Node {
                 leader_addr.as_str(),
             )
             .unwrap();
-        socket
-            .send_to(&Encoder::encode_to_bytes(PING_MSG), leader_addr.as_str())
-            .unwrap();
 
         loop {
             let mut buf = [0; 128];
@@ -129,7 +126,7 @@ impl Node {
         &self,
         socket: UdpSocket,
         mut blockchain: Blockchain,
-        stdin_buf: Arc<Mutex<Option<String>>>,
+        _stdin_buf: Arc<Mutex<Option<String>>>,
     ) {
         println!("Soy el líder!");
         let mut other_nodes: Vec<SocketAddr> = vec![];
@@ -225,7 +222,7 @@ impl Node {
         // nuestra IP entonces somos nosotros.
         println!("Enviando mensaje de discovery");
 
-        self.writer.write_all(NEW_NODE_MSG.as_bytes()).unwrap();
+        self.writer.write_all(DISCOVER_MSG.as_bytes()).unwrap();
         self.writer
             .write_all(&Encoder::encode_to_bytes(self.bully_addr.as_str()))
             .unwrap();
