@@ -52,7 +52,7 @@ impl Coordinator {
                             if !mine {
                                 local_mutex.acquire();
                                 mine = true;
-                                node.write("OK".to_string());
+                                node.write("OK\n".to_string());
                                 println!("[COORDINATOR] le dí lock a {}", id);
                             }
                         }
