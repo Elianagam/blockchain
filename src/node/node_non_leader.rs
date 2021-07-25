@@ -45,7 +45,6 @@ pub fn run_bully_as_non_leader(
 
     let mysocket = socket.try_clone().unwrap();
     let tmp = leader_addr.clone();
-    //let read = format!("{}", (*stdin_buf.lock().unwrap()).as_ref().unwrap().clone());
 
     //TODO. sacar este busy wait reemplazarlo por condvar
     thread::spawn(move || loop {
@@ -53,7 +52,6 @@ pub fn run_bully_as_non_leader(
         let value = (*stdin_buf.lock().unwrap()).clone();
         match value {
             Some(stdin_msg) => {
-                println!("Enviando msj leido por stdin {}", stdin_msg);
                 mysocket
                     .send_to(&Encoder::encode_to_bytes(&stdin_msg), tmp.as_str())
                     .unwrap();
@@ -63,7 +61,6 @@ pub fn run_bully_as_non_leader(
         }
     });
 
-    println!("Enviando mensaje {} al lider", PING_MSG);
     socket
         .send_to(
             &Encoder::encode_to_bytes(REGISTER_MSG),
@@ -78,9 +75,6 @@ pub fn run_bully_as_non_leader(
         let mut buf = [0; 128];
         let (_, _) = socket.recv_from(&mut buf).unwrap();
         let msg = Encoder::decode_from_bytes(buf.to_vec());
-
-        //TODO: sacar este busy wait usar condvar
-        //if read == CLOSE { break; }
 
         match msg.as_str() {
             NEW_NODE => {

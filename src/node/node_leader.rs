@@ -3,6 +3,8 @@ use crate::messages::{BLOCKCHAIN, CLOSE, END, NEW_NODE, REGISTER_MSG};
 
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::{Arc, Mutex};
+use std::thread;
+
 
 use crate::blockchain::{Block, Blockchain};
 
@@ -49,16 +51,15 @@ pub fn run_bully_as_leader(
     println!("Soy el líder!");
     let mut other_nodes: Vec<SocketAddr> = vec![];
     let mut propagated_msgs = 0;
+    //let _clone_other_nodes = other_nodes.clone();
+    //let _clone_socket = socket.try_clone().unwrap();
 
     loop {
         let mut buf = [0; 128];
         let (_, from) = socket.recv_from(&mut buf).unwrap();
-
         let msg = Encoder::decode_from_bytes(buf.to_vec());
 
-        if propagated_msgs == 10 {
-            break;
-        }
+        if propagated_msgs == 10 { break; }
 
         match msg.as_str() {
             REGISTER_MSG => {

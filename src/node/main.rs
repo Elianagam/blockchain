@@ -52,7 +52,7 @@ fn usage() -> i32 {
 }
 
 fn read_stdin() -> String {
-    println!("Ingresar dato a blockchain: ");
+    //println!("Ingresar dato a blockchain: ");
     let stdin = io::stdin();
     let mut iterator = stdin.lock().lines();
     let line = iterator.next().unwrap().unwrap();
