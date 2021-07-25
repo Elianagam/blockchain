@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use crate::blockchain::{Block, Blockchain};
 use crate::encoder::Encoder;
-use crate::messages::{BLOCKCHAIN, CLOSE, END, NEW_NODE, DISCOVER_MSG, REGISTER_MSG};
+use crate::messages::{BLOCKCHAIN, CLOSE, DISCOVER_MSG, END, NEW_NODE, REGISTER_MSG};
 use std::net::{SocketAddr, UdpSocket};
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
