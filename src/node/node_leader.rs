@@ -1,8 +1,8 @@
 use crate::encoder::Encoder;
-use crate::messages::{REGISTER_MSG, NEW_NODE, END, BLOCKCHAIN_MSG};
+use crate::messages::{BLOCKCHAIN, CLOSE, END, NEW_NODE, REGISTER_MSG};
 
 use std::net::{SocketAddr, UdpSocket};
-use std::sync::{Mutex, Arc};
+use std::sync::{Arc, Mutex};
 
 use crate::blockchain::{Block, Blockchain};
 
@@ -27,9 +27,9 @@ fn send_all_addr(other_nodes: Vec<SocketAddr>, socket: UdpSocket) {
     }
 }
 
-fn send_blockchain(blockchain: Blockchain, from: SocketAddr,socket: UdpSocket) {
+fn send_blockchain(blockchain: Blockchain, from: SocketAddr, socket: UdpSocket) {
     socket
-        .send_to(&Encoder::encode_to_bytes(BLOCKCHAIN_MSG), from)
+        .send_to(&Encoder::encode_to_bytes(BLOCKCHAIN), from)
         .unwrap();
     for b in blockchain.get_blocks() {
         socket
@@ -41,7 +41,11 @@ fn send_blockchain(blockchain: Blockchain, from: SocketAddr,socket: UdpSocket) {
         .unwrap();
 }
 
-pub fn run_bully_as_leader(socket: UdpSocket, mut blockchain: Blockchain, stdin_buf: Arc<Mutex<Option<String>>>) {
+pub fn run_bully_as_leader(
+    socket: UdpSocket,
+    mut blockchain: Blockchain,
+    _stdin_buf: Arc<Mutex<Option<String>>>,
+) {
     println!("Soy el líder!");
     let mut other_nodes: Vec<SocketAddr> = vec![];
     let mut propagated_msgs = 0;
@@ -65,10 +69,12 @@ pub fn run_bully_as_leader(socket: UdpSocket, mut blockchain: Blockchain, stdin_
                     send_blockchain(blockchain.clone(), from, socket.try_clone().unwrap());
                 }
             }
-            "close\n" => {
+            CLOSE => {
+                socket
+                    .send_to(&Encoder::encode_to_bytes(&msg), from)
+                    .unwrap();
                 other_nodes.retain(|&x| x != from);
                 send_all_addr(other_nodes.clone(), socket.try_clone().unwrap());
-                println!("{:?}", other_nodes);
             }
             msg => {
                 println!("Propagando cambios {:?} al resto de los nodos", msg);
@@ -81,7 +87,6 @@ pub fn run_bully_as_leader(socket: UdpSocket, mut blockchain: Blockchain, stdin_
                     data: msg.to_string(),
                 });
                 propagated_msgs += 1;
-
             }
         }
     }

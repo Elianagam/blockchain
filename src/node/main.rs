@@ -11,18 +11,22 @@ mod node_leader;
 mod node_non_leader;
 
 use std::env;
-use std::process;
-use std::thread;
-use std::sync::{Mutex, Arc};
-use std::time::Duration;
-use std::net::UdpSocket;
 use std::io::{self, BufRead};
+use std::net::UdpSocket;
+use std::process;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 use blockchain::Blockchain;
 use node_leader::run_bully_as_leader;
 use node_non_leader::run_bully_as_non_leader;
 
-fn run_bully_thread(bully_sock: UdpSocket, leader_addr: Arc<Mutex<Option<String>>>, stdin_buf: Arc<Mutex<Option<String>>>) -> () {
+fn run_bully_thread(
+    bully_sock: UdpSocket,
+    leader_addr: Arc<Mutex<Option<String>>>,
+    stdin_buf: Arc<Mutex<Option<String>>>,
+) -> () {
     let blockchain = Blockchain::new();
 
     // FIXME: usar condvars
@@ -30,7 +34,9 @@ fn run_bully_thread(bully_sock: UdpSocket, leader_addr: Arc<Mutex<Option<String>
         std::thread::sleep(Duration::from_secs(1));
     }
 
-    let leader_addr = (*leader_addr.lock().unwrap()).clone().expect("No leader addr");
+    let leader_addr = (*leader_addr.lock().unwrap())
+        .clone()
+        .expect("No leader addr");
 
     let iamleader = leader_addr == bully_sock.local_addr().unwrap().to_string();
 

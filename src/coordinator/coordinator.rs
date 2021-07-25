@@ -1,6 +1,6 @@
-use crate::node_accepted::NodeAccepted;
 use crate::logger::Logger;
-use crate::messages::{ACQUIRE_MSG, RELEASE_MSG, DISCOVER_MSG, DISCONNECT_MSG};
+use crate::messages::{ACQUIRE_MSG, DISCONNECT_MSG, DISCOVER_MSG, RELEASE_MSG};
+use crate::node_accepted::NodeAccepted;
 
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
@@ -19,7 +19,11 @@ impl Coordinator {
     pub fn new(logger: Arc<Logger>) -> Coordinator {
         let socket = TcpListener::bind(CTOR_ADDR).unwrap();
         let current_leader = Arc::new(Mutex::new(None));
-        Coordinator { socket, current_leader, logger: logger.clone() }
+        Coordinator {
+            socket,
+            current_leader,
+            logger: logger.clone(),
+        }
     }
 
     pub fn run(&self) {
@@ -68,10 +72,14 @@ impl Coordinator {
                                 Some(current_leader_addr) => {
                                     println!("[COORDINATOR] Lider encontrado, devolviendolo");
                                     node.write(format!("{}\n", current_leader_addr.clone()));
-                                },
+                                }
                                 None => {
-                                    println!("[COORDINATOR] Seteando como lider a: {:?}", new_node_bully_addr);
-                                    *current_leader.lock().unwrap() = Some(new_node_bully_addr.clone());
+                                    println!(
+                                        "[COORDINATOR] Seteando como lider a: {:?}",
+                                        new_node_bully_addr
+                                    );
+                                    *current_leader.lock().unwrap() =
+                                        Some(new_node_bully_addr.clone());
 
                                     // Hacemos un echo de la IP que nos pasaron, de esta forma
                                     // el nodo puede saber que se lo asigno como lider.

@@ -5,7 +5,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::encoder::Encoder;
-use crate::messages::{ACQUIRE_MSG, RELEASE_MSG, NEW_NODE_MSG};
+use crate::messages::{ACQUIRE_MSG, NEW_NODE_MSG, RELEASE_MSG};
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
 
@@ -21,7 +21,12 @@ impl Node {
         let stream = TcpStream::connect(CTOR_ADDR).unwrap();
         let writer = stream.try_clone().unwrap();
         let reader = BufReader::new(stream);
-        Node { writer, reader, leader_addr, bully_addr }
+        Node {
+            writer,
+            reader,
+            leader_addr,
+            bully_addr,
+        }
     }
 
     pub fn run(&mut self) {
@@ -45,12 +50,14 @@ impl Node {
     }
 
     fn fetch_leader_addr(&mut self) {
-        // Pregunta al coordinador la IP del lider actual, si recibimos 
+        // Pregunta al coordinador la IP del lider actual, si recibimos
         // nuestra IP entonces somos nosotros.
         println!("Enviando mensaje de discovery");
 
         self.writer.write_all(NEW_NODE_MSG.as_bytes()).unwrap();
-        self.writer.write_all(&Encoder::encode_to_bytes(self.bully_addr.as_str())).unwrap();
+        self.writer
+            .write_all(&Encoder::encode_to_bytes(self.bully_addr.as_str()))
+            .unwrap();
 
         let mut buffer = String::new();
         self.reader.read_line(&mut buffer).unwrap();
