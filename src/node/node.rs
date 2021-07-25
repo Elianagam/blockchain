@@ -129,22 +129,35 @@ impl Node {
         &self,
         socket: UdpSocket,
         mut blockchain: Blockchain,
-        _stdin_buf: Arc<Mutex<Option<String>>>,
+        stdin_buf: Arc<Mutex<Option<String>>>,
     ) {
         println!("Soy el líder!");
         let mut other_nodes: Vec<SocketAddr> = vec![];
-        let mut propagated_msgs = 0;
-        //let _clone_other_nodes = other_nodes.clone();
-        //let _clone_socket = socket.try_clone().unwrap();
 
+        /*
+        let value = (*stdin_buf.lock().unwrap()).clone();
+            match value {
+                Some(stdin) => {
+                    match stdin.as_str() {
+                        CLOSE => { break; }
+                        msg => {
+                            blockchain = self.add_block(
+                                &msg,
+                                blockchain.clone(),
+                                other_nodes.clone(),
+                                socket.try_clone().unwrap(),
+                            );
+                        }
+                    }
+                }
+                None => {}
+            }
+        */
         loop {
             let mut buf = [0; 128];
             let (_, from) = socket.recv_from(&mut buf).unwrap();
             let msg = Encoder::decode_from_bytes(buf.to_vec());
 
-            if propagated_msgs == 10 {
-                break;
-            }
             println!("{:?}", other_nodes);
 
             match msg.as_str() {
@@ -164,19 +177,34 @@ impl Node {
                     self.send_all_addr(other_nodes.clone(), socket.try_clone().unwrap());
                 }
                 msg => {
-                    println!("Propagando cambios {:?} al resto de los nodos", msg);
-                    for node in &other_nodes {
-                        socket
-                            .send_to(&Encoder::encode_to_bytes(msg), node)
-                            .unwrap();
-                    }
-                    blockchain.add(Block {
-                        data: msg.to_string(),
-                    });
-                    propagated_msgs += 1;
+                    blockchain = self.add_block(
+                        msg,
+                        blockchain.clone(),
+                        other_nodes.clone(),
+                        socket.try_clone().unwrap(),
+                    );
                 }
             }
         }
+    }
+
+    fn add_block(
+        &self,
+        msg: &str,
+        mut blockchain: Blockchain,
+        other_nodes: Vec<SocketAddr>,
+        socket: UdpSocket,
+    ) -> Blockchain {
+        println!("Propagando cambios {:?} al resto de los nodos", msg);
+        for node in &other_nodes {
+            socket
+                .send_to(&Encoder::encode_to_bytes(msg), node)
+                .unwrap();
+        }
+        blockchain.add(Block {
+            data: msg.to_string(),
+        });
+        blockchain
     }
 
     /*

@@ -31,7 +31,6 @@ fn main() -> Result<(), ()> {
     let bully_sock_addr = bully_sock.local_addr().unwrap().to_string();
     let leader_addr = Arc::new(Mutex::new(None));
     let tmp = stdin_buffer.clone();
-    //let t = thread::spawn(move || run_bully_thread(bully_sock, leader, tmp));
 
     let t = thread::spawn(move || {
         let mut node = node::Node::new(bully_sock_addr, leader_addr.clone());
