@@ -1,73 +1,73 @@
 use std::io::{BufRead, BufReader, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, SocketAddr, UdpSocket};
 use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 use crate::blockchain::{Block, Blockchain};
-use crate::encoder::Encoder;
-use crate::messages::{BLOCKCHAIN, CLOSE, DISCOVER_MSG, END, NEW_NODE, REGISTER_MSG};
-use std::net::{SocketAddr, UdpSocket};
+use crate::encoder::{encode_to_bytes, decode_from_bytes};
+use crate::messages::*;
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
 
 pub struct Node {
     pub writer: TcpStream,
     pub reader: BufReader<TcpStream>,
+    pub bully_sock: UdpSocket,
     pub leader_addr: Arc<Mutex<Option<String>>>,
-    pub bully_addr: String,
+    pub blockchain: Blockchain,
 }
 
 impl Node {
-    pub fn new(bully_addr: String, leader_addr: Arc<Mutex<Option<String>>>) -> Self {
+    pub fn new() -> Self {
         let stream = TcpStream::connect(CTOR_ADDR).unwrap();
         let writer = stream.try_clone().unwrap();
         let reader = BufReader::new(stream);
+        let blockchain = Blockchain::new();
+        let bully_sock = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let leader_addr = Arc::new(Mutex::new(None));
         Node {
             writer,
             reader,
             leader_addr,
-            bully_addr,
+            bully_sock,
+            blockchain,
         }
     }
 
     pub fn run(
         &mut self,
-        bully_sock: UdpSocket,
-        leader_addr: Arc<Mutex<Option<String>>>,
         stdin_buf: Arc<Mutex<Option<String>>>,
     ) -> () {
+
         self.fetch_leader_addr();
-        let blockchain = Blockchain::new();
 
         // FIXME: usar condvars
-        while leader_addr.lock().unwrap().is_none() {
+        while self.leader_addr.lock().unwrap().is_none() {
             std::thread::sleep(Duration::from_secs(1));
         }
 
-        let leader_addr = (*leader_addr.lock().unwrap())
+        let leader_addr = (*self.leader_addr.lock().unwrap())
             .clone()
             .expect("No leader addr");
 
-        let iamleader = leader_addr == bully_sock.local_addr().unwrap().to_string();
+        let iamleader = leader_addr == self.bully_sock.local_addr().unwrap().to_string();
 
         match iamleader {
-            true => self.run_bully_as_leader(bully_sock, blockchain, stdin_buf),
-            false => self.run_bully_as_non_leader(bully_sock, blockchain, leader_addr, stdin_buf),
+            true => self.run_bully_as_leader(stdin_buf),
+            false => self.run_bully_as_non_leader(leader_addr, stdin_buf),
         }
     }
 
     pub fn run_bully_as_non_leader(
-        &self,
-        socket: UdpSocket,
-        mut blockchain: Blockchain,
+        &mut self,
         leader_addr: String,
         stdin_buf: Arc<Mutex<Option<String>>>,
     ) {
         let mut other_nodes: Vec<String> = vec![];
 
-        let mysocket = socket.try_clone().unwrap();
+        let mysocket = self.bully_sock.try_clone().unwrap();
         let tmp = leader_addr.clone();
 
         //TODO. sacar este busy wait reemplazarlo por condvar
@@ -77,7 +77,7 @@ impl Node {
             match value {
                 Some(stdin_msg) => {
                     mysocket
-                        .send_to(&Encoder::encode_to_bytes(&stdin_msg), tmp.as_str())
+                        .send_to(&encode_to_bytes(&stdin_msg), tmp.as_str())
                         .unwrap();
                     *(&stdin_buf).lock().unwrap() = None;
                 }
@@ -85,51 +85,51 @@ impl Node {
             }
         });
 
-        socket
+        self.bully_sock
             .send_to(
-                &Encoder::encode_to_bytes(REGISTER_MSG),
+                &encode_to_bytes(REGISTER_MSG),
                 leader_addr.as_str(),
             )
             .unwrap();
 
         loop {
             let mut buf = [0; 128];
-            let (_, _) = socket.recv_from(&mut buf).unwrap();
-            let msg = Encoder::decode_from_bytes(buf.to_vec());
+            let (_, _) = self.bully_sock.recv_from(&mut buf).unwrap();
+            let msg = decode_from_bytes(buf.to_vec());
             println!("{:?}", other_nodes);
 
             match msg.as_str() {
                 NEW_NODE => {
                     other_nodes =
-                        self.recv_all_addr(other_nodes.clone(), socket.try_clone().unwrap());
+                        self.recv_all_addr(other_nodes.clone(), self.bully_sock.try_clone().unwrap());
                 }
                 BLOCKCHAIN => {
-                    blockchain = self.recv_blockchain(blockchain, socket.try_clone().unwrap());
+                    self.blockchain = self.recv_blockchain(self.bully_sock.try_clone().unwrap());
                 }
                 CLOSE => {
                     break;
                 }
                 msg => {
                     println!("Recibido {}", &msg);
-                    blockchain.add(Block {
+                    self.blockchain.add(Block {
                         data: msg.to_string(),
                     });
-                    println!("{}", blockchain);
+                    println!("{}", self.blockchain);
                 }
             }
         }
-        println!("{}\nNodo Desconectado...", blockchain);
+        println!("Desconectando...");
+        println!("{}", self.blockchain);
         process::exit(-1);
     }
 
     pub fn run_bully_as_leader(
-        &self,
-        socket: UdpSocket,
-        mut blockchain: Blockchain,
+        &mut self,
         _stdin_buf: Arc<Mutex<Option<String>>>,
     ) {
         println!("Soy el líder!");
         let mut other_nodes: Vec<SocketAddr> = vec![];
+        let mut propagated_msgs = 0;
 
         /*
         let value = (*stdin_buf.lock().unwrap()).clone();
@@ -152,70 +152,56 @@ impl Node {
         */
         loop {
             let mut buf = [0; 128];
-            let (_, from) = socket.recv_from(&mut buf).unwrap();
-            let msg = Encoder::decode_from_bytes(buf.to_vec());
+            let (_, from) = self.bully_sock.recv_from(&mut buf).unwrap();
+            let msg = decode_from_bytes(buf.to_vec());
 
             println!("{:?}", other_nodes);
+            if propagated_msgs == 10 {
+                break;
+            }
 
             match msg.as_str() {
                 REGISTER_MSG => {
                     println!("Registrando nodo: {}", from);
                     if !&other_nodes.contains(&from) {
                         other_nodes.push(from);
-                        self.send_all_addr(other_nodes.clone(), socket.try_clone().unwrap());
-                        self.send_blockchain(blockchain.clone(), from, socket.try_clone().unwrap());
+                        self.send_all_addr(other_nodes.clone(), self.bully_sock.try_clone().unwrap());
+                        self.send_blockchain(self.blockchain.clone(), from, self.bully_sock.try_clone().unwrap());
                     }
                 }
                 CLOSE => {
-                    socket
-                        .send_to(&Encoder::encode_to_bytes(&msg), from)
+                    self.bully_sock
+                        .send_to(&encode_to_bytes(&msg), from)
                         .unwrap();
                     other_nodes.retain(|&x| x != from);
-                    self.send_all_addr(other_nodes.clone(), socket.try_clone().unwrap());
+                    self.send_all_addr(other_nodes.clone(), self.bully_sock.try_clone().unwrap());
                 }
                 msg => {
-                    blockchain = self.add_block(
-                        msg,
-                        blockchain.clone(),
-                        other_nodes.clone(),
-                        socket.try_clone().unwrap(),
-                    );
+                    println!("Propagando cambios {:?} al resto de los nodos", msg);
+                    for node in &other_nodes {
+                        self.bully_sock
+                            .send_to(&encode_to_bytes(msg), node)
+                            .unwrap();
+                    }
+                    self.blockchain.add(Block {
+                        data: msg.to_string(),
+                    });
+                    propagated_msgs += 1;
                 }
             }
         }
     }
 
-    fn add_block(
-        &self,
-        msg: &str,
-        mut blockchain: Blockchain,
-        other_nodes: Vec<SocketAddr>,
-        socket: UdpSocket,
-    ) -> Blockchain {
-        println!("Propagando cambios {:?} al resto de los nodos", msg);
-        for node in &other_nodes {
-            socket
-                .send_to(&Encoder::encode_to_bytes(msg), node)
-                .unwrap();
-        }
-        blockchain.add(Block {
-            data: msg.to_string(),
-        });
-        blockchain
-    }
-
-    /*
-    fn acquire(&mut self) {
+    fn _acquire(&mut self) {
         self.writer.write_all(ACQUIRE_MSG.as_bytes()).unwrap();
         let mut buffer = String::new();
         self.reader.read_line(&mut buffer).unwrap();
         println!("Read {}", buffer);
     }
 
-    fn release(&mut self) {
+    fn _release(&mut self) {
         self.writer.write_all(RELEASE_MSG.as_bytes()).unwrap();
     }
-    */
 
     fn fetch_leader_addr(&mut self) {
         // Pregunta al coordinador la IP del lider actual, si recibimos
@@ -224,7 +210,7 @@ impl Node {
 
         self.writer.write_all(DISCOVER_MSG.as_bytes()).unwrap();
         self.writer
-            .write_all(&Encoder::encode_to_bytes(self.bully_addr.as_str()))
+            .write_all(&encode_to_bytes(self.bully_sock.local_addr().unwrap().to_string().as_str()))
             .unwrap();
 
         let mut buffer = String::new();
@@ -236,23 +222,24 @@ impl Node {
 
     fn send_blockchain(&self, blockchain: Blockchain, from: SocketAddr, socket: UdpSocket) {
         socket
-            .send_to(&Encoder::encode_to_bytes(BLOCKCHAIN), from)
+            .send_to(&encode_to_bytes(BLOCKCHAIN), from)
             .unwrap();
         for b in blockchain.get_blocks() {
             socket
-                .send_to(&Encoder::encode_to_bytes(&b.data), from)
+                .send_to(&encode_to_bytes(&b.data), from)
                 .unwrap();
         }
         socket
-            .send_to(&Encoder::encode_to_bytes(END), from)
+            .send_to(&encode_to_bytes(END), from)
             .unwrap();
     }
 
-    fn recv_blockchain(&self, mut blockchain: Blockchain, socket: UdpSocket) -> Blockchain {
+    fn recv_blockchain(&self, socket: UdpSocket) -> Blockchain {
+        let mut blockchain = Blockchain::new();
         loop {
             let mut buf = [0; 128];
             let (_, _) = socket.recv_from(&mut buf).unwrap();
-            let block = Encoder::decode_from_bytes(buf.to_vec());
+            let block = decode_from_bytes(buf.to_vec());
             if block == END {
                 break;
             }
@@ -264,7 +251,7 @@ impl Node {
     fn send_all_addr(&self, other_nodes: Vec<SocketAddr>, socket: UdpSocket) {
         for node_conected in &other_nodes {
             socket
-                .send_to(&Encoder::encode_to_bytes(NEW_NODE), node_conected)
+                .send_to(&encode_to_bytes(NEW_NODE), node_conected)
                 .unwrap();
             for node_addr in &other_nodes {
                 if node_addr == node_conected {
@@ -273,11 +260,11 @@ impl Node {
                 }
                 let addr = format!("{}", node_addr);
                 socket
-                    .send_to(&Encoder::encode_to_bytes(&addr), node_conected)
+                    .send_to(&encode_to_bytes(&addr), node_conected)
                     .unwrap();
             }
             socket
-                .send_to(&Encoder::encode_to_bytes(END), node_conected)
+                .send_to(&encode_to_bytes(END), node_conected)
                 .unwrap();
         }
     }
@@ -286,7 +273,7 @@ impl Node {
         loop {
             let mut buf = [0; 128];
             let (_, _) = socket.recv_from(&mut buf).unwrap();
-            let msg_addr = Encoder::decode_from_bytes(buf.to_vec());
+            let msg_addr = decode_from_bytes(buf.to_vec());
             if msg_addr == END {
                 break;
             }

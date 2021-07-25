@@ -10,7 +10,6 @@ mod node;
 
 use std::env;
 use std::io::{self, BufRead};
-use std::net::UdpSocket;
 use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -25,16 +24,12 @@ fn main() -> Result<(), ()> {
     if args.len() > 1 {
         process::exit(usage());
     }
-
     let stdin_buffer = Arc::new(Mutex::new(None));
-    let bully_sock = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let bully_sock_addr = bully_sock.local_addr().unwrap().to_string();
-    let leader_addr = Arc::new(Mutex::new(None));
     let tmp = stdin_buffer.clone();
 
     let t = thread::spawn(move || {
-        let mut node = node::Node::new(bully_sock_addr, leader_addr.clone());
-        node.run(bully_sock, leader_addr.clone(), tmp);
+        let mut node = node::Node::new();
+        node.run(tmp);
     });
 
     for _ in 1..10 {
