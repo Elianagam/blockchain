@@ -14,7 +14,9 @@ const CTOR_ADDR: &str = "127.0.0.1:8001";
 pub struct Node {
     pub writer: TcpStream,
     pub reader: BufReader<TcpStream>,
+    //TODO bully_sock -> bully_ctrl_sock
     pub bully_sock: UdpSocket,
+    pub bully_data_sock: UdpSocket,
     pub leader_addr: Arc<Mutex<Option<String>>>,
     pub blockchain: Blockchain,
 }
@@ -25,13 +27,21 @@ impl Node {
         let writer = stream.try_clone().unwrap();
         let reader = BufReader::new(stream);
         let blockchain = Blockchain::new();
+
         let bully_sock = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let bully_data_port = bully_sock.local_addr().unwrap().port() + 1;
+        let addr = format!("{}:{}", bully_sock.local_addr().unwrap().ip(), bully_data_port);
+
+        println!("Bully data sock {}", addr);
+
+        let bully_data_sock = UdpSocket::bind(addr).unwrap();
         let leader_addr = Arc::new(Mutex::new(None));
         Node {
             writer,
             reader,
             leader_addr,
             bully_sock,
+            bully_data_sock,
             blockchain,
         }
     }
@@ -67,7 +77,10 @@ impl Node {
     ) {
         let mut other_nodes: Vec<String> = vec![];
 
-        let mysocket = self.bully_sock.try_clone().unwrap();
+        let wait_for_echo = Arc::new(Mutex::new(false));
+
+        let mysocket = self.bully_data_sock.try_clone().unwrap();
+        let echo_flag = wait_for_echo.clone();
         let tmp = leader_addr.clone();
 
         //TODO. sacar este busy wait reemplazarlo por condvar
@@ -79,9 +92,35 @@ impl Node {
                     mysocket
                         .send_to(&encode_to_bytes(&stdin_msg), tmp.as_str())
                         .unwrap();
+                    (*echo_flag.lock().unwrap()) = true;
                     *(&stdin_buf).lock().unwrap() = None;
                 }
                 _ => {}
+            }
+        });
+
+        let mysocket2 = self.bully_data_sock.try_clone().unwrap();
+
+        mysocket2.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+
+        thread::spawn(move || loop {
+            let mut buf = [0; 128];
+            match mysocket2.recv_from(&mut buf) {
+                Ok(_) => {
+                    let msg = decode_from_bytes(buf.to_vec());
+                    match msg.as_str() {
+                        _ => {
+                            println!("Setting echo_flag in false");
+                            (*wait_for_echo.lock().unwrap()) = false;
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("{}", e);
+                    if *wait_for_echo.lock().unwrap() {
+                        panic!("El lider ha muerto");
+                    }
+                }
             }
         });
 
@@ -91,6 +130,7 @@ impl Node {
                 leader_addr.as_str(),
             )
             .unwrap();
+
         self.bully_sock
             .send_to(&encode_to_bytes(PING_MSG), leader_addr.as_str())
             .unwrap();
@@ -164,8 +204,10 @@ impl Node {
                 msg => {
                     println!("Propagando cambios {:?} al resto de los nodos", msg);
                     for node in &other_nodes {
-                        self.bully_sock
-                            .send_to(&encode_to_bytes(msg), node)
+                        let node_addr = format!("{}:{}", node.ip().to_string(), node.port() + 1);
+                        println!("Enviando datos a {}", node_addr);
+                        self.bully_data_sock
+                            .send_to(&encode_to_bytes(msg), node_addr)
                             .unwrap();
                     }
                     self.blockchain.add(Block {
