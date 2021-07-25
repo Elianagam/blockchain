@@ -1,5 +1,5 @@
 use crate::encoder::Encoder;
-use crate::messages::{REGISTER_MSG, NEW_NODE, END};
+use crate::messages::{REGISTER_MSG, NEW_NODE, END, BLOCKCHAIN_MSG};
 
 use std::net::{SocketAddr, UdpSocket};
 
@@ -11,6 +11,10 @@ fn send_all_addr(other_nodes: Vec<SocketAddr>, socket: UdpSocket) {
             .send_to(&Encoder::encode_to_bytes(NEW_NODE), node_conected)
             .unwrap();
         for node_addr in &other_nodes {
+            if node_addr == node_conected {
+                // No queremos mandar la propia IP a cada nodo
+                continue;
+            }
             let addr = format!("{}", node_addr);
             socket
                 .send_to(&Encoder::encode_to_bytes(&addr), node_conected)
@@ -20,6 +24,20 @@ fn send_all_addr(other_nodes: Vec<SocketAddr>, socket: UdpSocket) {
             .send_to(&Encoder::encode_to_bytes(END), node_conected)
             .unwrap();
     }
+}
+
+fn send_blockchain(blockchain: Blockchain, from: SocketAddr,socket: UdpSocket) {
+    socket
+        .send_to(&Encoder::encode_to_bytes(BLOCKCHAIN_MSG), from)
+        .unwrap();
+    for b in blockchain.get_blocks() {
+        socket
+            .send_to(&Encoder::encode_to_bytes(&b.data), from)
+            .unwrap();
+    }
+    socket
+        .send_to(&Encoder::encode_to_bytes(END), from)
+        .unwrap();
 }
 
 pub fn run_bully_as_leader(socket: UdpSocket, mut blockchain: Blockchain) {
@@ -43,6 +61,7 @@ pub fn run_bully_as_leader(socket: UdpSocket, mut blockchain: Blockchain) {
                 if !&other_nodes.contains(&from) {
                     other_nodes.push(from);
                     send_all_addr(other_nodes.clone(), socket.try_clone().unwrap());
+                    send_blockchain(blockchain.clone(), from, socket.try_clone().unwrap());
                 }
             }
             "close\n" => {

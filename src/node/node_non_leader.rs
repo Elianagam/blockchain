@@ -1,10 +1,23 @@
-use crate::messages::{PING_MSG, REGISTER_MSG, NEW_NODE, END};
+use crate::messages::{PING_MSG, REGISTER_MSG, NEW_NODE, END, BLOCKCHAIN_MSG};
 use crate::encoder::Encoder;
 use crate::blockchain::{Block, Blockchain};
 
 use std::net::UdpSocket;
 use std::process;
 use std::io::{self, BufRead};
+
+fn recv_blockchain(mut blockchain: Blockchain, socket: UdpSocket) -> Blockchain {
+    loop {
+        let mut buf = [0; 128];
+        let (_, _) = socket.recv_from(&mut buf).unwrap();
+        let block = Encoder::decode_from_bytes(buf.to_vec());
+        if block == END {
+            break;
+        }
+        blockchain.add(Block { data: block });
+    }
+    blockchain
+}
 
 fn recv_all_addr(mut other_nodes: Vec<String>, socket: UdpSocket) -> Vec<String> {
     loop {
@@ -44,10 +57,13 @@ pub fn run_bully_as_non_leader(socket: UdpSocket, mut blockchain: Blockchain, le
         let (_, _) = socket.recv_from(&mut buf).unwrap();
         let msg = Encoder::decode_from_bytes(buf.to_vec());
         
+
         match msg.as_str() {
-            NEW_NODE => {
+            NEW_NODE =>{
                 other_nodes = recv_all_addr(other_nodes.clone(), socket.try_clone().unwrap());
-                //println!("{:?}", other_nodes);
+            }
+            BLOCKCHAIN_MSG => {
+                blockchain = recv_blockchain(blockchain, socket.try_clone().unwrap());
             }
             "close" => { 
                 break;
@@ -58,6 +74,7 @@ pub fn run_bully_as_non_leader(socket: UdpSocket, mut blockchain: Blockchain, le
                 socket
                     .send_to(&Encoder::encode_to_bytes(&read_stdin()), leader_addr.as_str())
                     .unwrap();
+                println!("{}", blockchain);
             }
         }
     }

@@ -6,11 +6,10 @@ pub struct Block {
     pub data: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Blockchain {
     blocks: Vec<Block>,
 }
-
 impl Blockchain {
     pub fn new() -> Self {
         Self { blocks: vec![] }
@@ -18,6 +17,10 @@ impl Blockchain {
 
     pub fn add(&mut self, new_block: Block) {
         self.blocks.push(new_block);
+    }
+
+    pub fn get_blocks(&self) -> Vec<Block> {
+        self.blocks.clone()
     }
 }
 
