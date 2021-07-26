@@ -38,7 +38,7 @@ impl WorldState for Blockchain {
             return Ok(())
         }
         else {
-            return Err("Qualification must be between 1 and 10. ");
+            return Err("Qualification must be between 1 and 10");
         }
         
     }
