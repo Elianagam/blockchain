@@ -126,13 +126,12 @@ impl Node {
                     block.add_record(create_student);
                     self.blockchain.append_block(block);
      
-                    println!("{:#?}", self.blockchain);
+                    println!("{}", self.blockchain);
                 }
             }
         }
         println!("Desconectando...");
-        println!("Blockchain:");
-        println!("{:#?}", self.blockchain);
+        println!("{:}", self.blockchain);
         process::exit(-1);
     }
 

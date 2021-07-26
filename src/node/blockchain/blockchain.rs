@@ -4,6 +4,9 @@ use crate::Record;
 use std::vec::Vec;
 use std::collections::HashMap;
 use std::convert::Into;
+use std::fmt::Formatter;
+use std::fmt;
+use std::fmt::Display;
 
 /// The Blockchain container
 #[derive(Debug, Clone)]
@@ -117,5 +120,15 @@ impl Blockchain {
             }
         }
         Ok(())
+    }
+}
+
+impl Display for Blockchain {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut data = format!("\n\tPadron: Nota");
+        for (padron, q) in &self.students {
+            data = format!("{}\n\t{}: {}", data, padron, q.qualification);
+        }
+        write!(f, "Blockchain:{}", data)
     }
 }
