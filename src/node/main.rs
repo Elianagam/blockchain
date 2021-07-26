@@ -18,7 +18,7 @@ use student::Student;
 
 #[path = "blockchain/record.rs"]
 mod record;
-use record::{Record, RecordData};
+use record::{Record};
 
 mod encoder;
 mod node;

@@ -45,7 +45,6 @@ impl Node {
     ) -> () {
 
         self.fetch_leader_addr();
-        let mut blockchain = Blockchain::new();
 
         // FIXME: usar condvars
         while self.leader_addr.lock().unwrap().is_none() {
@@ -102,12 +101,12 @@ impl Node {
             let mut buf = [0; 128];
             let (_, _) = self.bully_sock.recv_from(&mut buf).unwrap();
             let msg = decode_from_bytes(buf.to_vec());
-            println!("{:?}", other_nodes);
 
             match msg.as_str() {
                 NEW_NODE => {
                     other_nodes =
                         self.recv_all_addr(other_nodes.clone(), self.bully_sock.try_clone().unwrap());
+                    println!("{:?}", other_nodes);
                 }
                 BLOCKCHAIN => {
                     self.blockchain = self.recv_blockchain(self.bully_sock.try_clone().unwrap());
@@ -130,8 +129,8 @@ impl Node {
                 }
             }
         }
-        println!("Desconectando...");
         println!("{:}", self.blockchain);
+        println!("Desconectando...");
         process::exit(-1);
     }
 
