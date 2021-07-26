@@ -94,7 +94,7 @@ impl Node {
             match msg.as_str() {
                 NEW_NODE => {
                     other_nodes = self.recv_all_addr(other_nodes.clone(), self.bully_sock.try_clone().unwrap());
-                    println!("{:?}", other_nodes);
+                    //println!("{:?}", other_nodes);
                 }
                 BLOCKCHAIN => {
                     self.blockchain = self.recv_blockchain(self.bully_sock.try_clone().unwrap());
@@ -106,11 +106,9 @@ impl Node {
                     let record = self.create_record(msg, self.bully_sock.try_clone().unwrap().local_addr().unwrap());
                     let mut block = Block::new(self.blockchain.get_last_block_hash());
                     block.add_record(record);
-                    if let Err(err) = self.blockchain.append_block(block)
-                    {
+                    if let Err(err) = self.blockchain.append_block(block) {
                         println!("{}", err);
-                    }
-                    else {
+                    } else {
                         println!("{}", self.blockchain);
                     }
                 }
@@ -125,8 +123,8 @@ impl Node {
         println!("Soy el líder!");
         let mut other_nodes: Vec<SocketAddr> = vec![];
         let mut propagated_msgs = 0;
-        let clone_other_nodes = other_nodes.clone();
         let clone_socket = self.bully_sock.try_clone().unwrap();
+        let tmp = self.bully_sock.local_addr().unwrap();
 
         //TODO. sacar este busy wait reemplazarlo por condvar
         thread::spawn(move || loop {
@@ -134,11 +132,9 @@ impl Node {
             let value = (*stdin_buf.lock().unwrap()).clone();
             match value {
                 Some(stdin_msg) => {
-                    for node in &clone_other_nodes {
-                        clone_socket
-                            .send_to(&encode_to_bytes(&stdin_msg), node)
-                            .unwrap();
-                    }
+                    clone_socket
+                        .send_to(&encode_to_bytes(&stdin_msg), tmp)
+                        .unwrap();
                     *(&stdin_buf).lock().unwrap() = None;
                 }
                 _ => {}
@@ -159,6 +155,9 @@ impl Node {
                         self.send_blockchain(self.blockchain.clone(),from,self.bully_sock.try_clone().unwrap());
                     }
                     println!("{:?}", other_nodes);
+                }
+                "close_leader" => {
+                    break;
                 }
                 CLOSE => {
                     self.bully_sock.send_to(&encode_to_bytes(&msg), from).unwrap();
@@ -182,6 +181,9 @@ impl Node {
                 }
             }
         }
+        println!("{}", self.blockchain);
+        println!("Desconectando leader...");
+        process::exit(-1);
     }
 
     fn read_from(&self) -> (String, SocketAddr) {

@@ -28,10 +28,26 @@ use std::io::{self, BufRead};
 use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use messages::CLOSE;
 
 fn usage() -> i32 {
     println!("Usage: cargo r --bin node");
     return -1;
+}
+
+fn read_stdin(stdin_buffer: Arc<Mutex<Option<String>>>) {
+    for _ in 1..10 {
+        let stdin = io::stdin();
+        let mut iterator = stdin.lock().lines();
+        let line = iterator.next().unwrap().unwrap();
+
+        let student_data: Vec<&str> = line.split(",").collect();
+        if (student_data.len() == 1 && student_data[0].contains(CLOSE)) || student_data.len() == 2 {
+            *(&stdin_buffer).lock().unwrap() = Some(line);
+        } else {
+            println!("Unsupported data format, usage: id, qualification")
+        }
+    }
 }
 
 fn main() -> Result<(), ()> {
@@ -47,19 +63,7 @@ fn main() -> Result<(), ()> {
         node.run(tmp);
     });
 
-    for _ in 1..10 {
-        let stdin = io::stdin();
-        let mut iterator = stdin.lock().lines();
-        let line = iterator.next().unwrap().unwrap();
-
-        let student_data: Vec<&str> = line.split(",").collect();
-        if (student_data.len() == 1 && student_data[0] == "close") || student_data.len() == 2 {
-            *(&stdin_buffer).lock().unwrap() = Some(line);
-        } else {
-            println!("Unsupported data format, usage: id, qualification")
-        }
-    }
-
+    read_stdin(stdin_buffer);
     t.join().unwrap();
 
     Ok(())
