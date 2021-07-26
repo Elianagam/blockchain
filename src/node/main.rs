@@ -53,7 +53,7 @@ fn main() -> Result<(), ()> {
         let mut iterator = stdin.lock().lines();
         let line = iterator.next().unwrap().unwrap();
 
-        let student_data:Vec<&str>= line.split(",").collect();
+        let student_data:Vec<&str> = line.split(",").collect();
         if (student_data.len() == 1 && student_data[0] == "close" ) || student_data.len() == 2 {
             *(&stdin_buffer).lock().unwrap() = Some(line);
         } else {

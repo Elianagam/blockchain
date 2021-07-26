@@ -283,7 +283,7 @@ impl Node {
                 .send_to(&encode_to_bytes(NEW_NODE), node_conected)
                 .unwrap();
             for node_addr in &other_nodes {
-                if node_addr == node_conected {
+                if node_addr != node_conected {
                     // No queremos mandar la propia IP a cada nodo
                     continue;
                 }
