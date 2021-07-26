@@ -134,9 +134,9 @@ impl Blockchain {
 
 impl Display for Blockchain {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut data = format!("Blockchain:\n\tPadron \tNota");
+        let mut data = format!("Blockchain:\n\tPadron\tNota");
         for (padron, q) in &self.students {
-            data = format!("{}\n\t{}\t {}", data, padron, q.qualification);
+            data = format!("{}\n\t{}\t{}", data, padron, q.qualification);
         }
         write!(f, "{}", data)
     }
