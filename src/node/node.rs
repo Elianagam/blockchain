@@ -90,10 +90,7 @@ impl Node {
             .unwrap();
 
         loop {
-            let mut buf = [0; 128];
-            let (_, _) = self.bully_sock.recv_from(&mut buf).unwrap();
-            let msg = decode_from_bytes(buf.to_vec());
-
+            let (msg, _from)= self.read_from();
             match msg.as_str() {
                 NEW_NODE => {
                     other_nodes = self.recv_all_addr(other_nodes.clone(), self.bully_sock.try_clone().unwrap());
@@ -125,14 +122,10 @@ impl Node {
         let mut propagated_msgs = 0;
 
         loop {
-            let mut buf = [0; 128];
-            let (_, from) = self.bully_sock.recv_from(&mut buf).unwrap();
-            let msg = decode_from_bytes(buf.to_vec());
-
+            let (msg, from)= self.read_from();
             if propagated_msgs == 10 {
                 break;
             }
-
             match msg.as_str() {
                 REGISTER_MSG => {
                     println!("Registrando nodo: {}", from);
@@ -160,6 +153,13 @@ impl Node {
                 }
             }
         }
+    }
+
+    fn read_from(&self) -> (String, SocketAddr) {
+        let mut buf = [0; 128];
+        let (_, from) = self.bully_sock.recv_from(&mut buf).unwrap();
+        let msg = decode_from_bytes(buf.to_vec());
+        (msg, from)
     }
 
     fn _acquire(&mut self) {
