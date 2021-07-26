@@ -66,8 +66,8 @@ impl Node {
     ) {
         let mut other_nodes: Vec<String> = vec![];
 
-        let mysocket = self.bully_sock.try_clone().unwrap();
-        let tmp = leader_addr.clone();
+        let clone_socket = self.bully_sock.try_clone().unwrap();
+        let clone_addr = leader_addr.clone();
 
         //TODO. sacar este busy wait reemplazarlo por condvar
         thread::spawn(move || loop {
@@ -75,8 +75,8 @@ impl Node {
             let value = (*stdin_buf.lock().unwrap()).clone();
             match value {
                 Some(stdin_msg) => {
-                    mysocket
-                        .send_to(&encode_to_bytes(&stdin_msg), tmp.as_str())
+                    clone_socket
+                        .send_to(&encode_to_bytes(&stdin_msg), clone_addr.as_str())
                         .unwrap();
                     *(&stdin_buf).lock().unwrap() = None;
                 }
@@ -89,7 +89,7 @@ impl Node {
             .unwrap();
 
         loop {
-            let (msg, _from)= self.read_from();
+            let (msg, _from) = self.read_from();
             match msg.as_str() {
                 NEW_NODE => {
                     other_nodes = self.recv_all_addr(other_nodes.clone(), self.bully_sock.try_clone().unwrap());
@@ -121,7 +121,7 @@ impl Node {
         println!("Soy el líder!");
         let mut other_nodes: Vec<SocketAddr> = vec![];
         let clone_socket = self.bully_sock.try_clone().unwrap();
-        let tmp = self.bully_sock.local_addr().unwrap();
+        let clone_addr = self.bully_sock.local_addr().unwrap();
 
         //TODO. sacar este busy wait reemplazarlo por condvar
         thread::spawn(move || loop {
@@ -130,7 +130,7 @@ impl Node {
             match value {
                 Some(stdin_msg) => {
                     clone_socket
-                        .send_to(&encode_to_bytes(&stdin_msg), tmp)
+                        .send_to(&encode_to_bytes(&stdin_msg), clone_addr)
                         .unwrap();
                     *(&stdin_buf).lock().unwrap() = None;
                 }
@@ -139,7 +139,7 @@ impl Node {
         });
         
         loop {
-            let (msg, from)= self.read_from();
+            let (msg, from) = self.read_from();
             match msg.as_str() {
                 REGISTER_MSG => {
                     println!("Registrando nodo: {}", from);
