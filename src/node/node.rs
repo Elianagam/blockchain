@@ -176,26 +176,13 @@ impl Node {
                     for node in &other_nodes {
                         self.bully_sock.send_to(&encode_to_bytes(msg), node).unwrap();
                     }
-                    self.blockchain.append_block(self.create_block(msg, from));
+                    let mut block = Block::new(self.blockchain.get_last_block_hash());
+                    block.add_record(self.create_record(msg, from));
+                    self.blockchain.append_block(block);
                     propagated_msgs += 1;
                 }
             }
         }
-    }
-
-    fn create_block(&self, msg: &str, from: SocketAddr) -> Block {
-        let student_data: Vec<&str> = msg.split(",").collect();
-        let create_student = Record::new(
-            from.to_string().into(),
-            RecordData::CreateStudent(
-                student_data[0].into(),
-                student_data[1].parse::<u32>().unwrap(),
-            ),
-            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(),
-        );
-        let mut block = Block::new(self.blockchain.get_last_block_hash());
-        block.add_record(create_student);
-        block
     }
 
     fn _acquire(&mut self) {
@@ -233,8 +220,7 @@ impl Node {
     fn send_blockchain(&self, blockchain: Blockchain, from: SocketAddr, socket: UdpSocket) {
         socket.send_to(&encode_to_bytes(BLOCKCHAIN), from).unwrap();
         for b in blockchain.blocks {
-            let mut data_to_send = "".to_string();
-
+            let mut data_to_send = String::new();
             match &b.records[0].record {
                 RecordData::CreateStudent(id, qualification) => {
                     data_to_send.push_str(
@@ -265,22 +251,9 @@ impl Node {
             if msg == END {
                 break;
             }
-
-            let student_data: Vec<&str> = msg.split(",").collect();
-            if student_data.len() == 4 {
-                let record = Record::new(
-                    student_data[3].into(),
-                    RecordData::CreateStudent(
-                        student_data[0].into(),
-                        student_data[1].parse::<u32>().unwrap(),
-                    ),
-                    Duration::from_millis(student_data[2].parse::<u64>().unwrap()),
-                );
-                let mut block = Block::new(blockchain.get_last_block_hash());
-                block.add_record(record);
-
-                blockchain.append_block(block);
-            }
+            let mut block = Block::new(blockchain.get_last_block_hash());
+            block.add_record(self.read_record(msg));
+            blockchain.append_block(block);
         }
         blockchain
     }
@@ -319,5 +292,31 @@ impl Node {
             }
         }
         other_nodes
+    }
+
+    fn read_record(&self, msg: String) -> Record {
+        let student_data: Vec<&str> = msg.split(",").collect();
+        let record = Record::new(
+            student_data[3].into(),
+            RecordData::CreateStudent(
+                student_data[0].into(),
+                student_data[1].parse::<u32>().unwrap(),
+            ),
+            Duration::from_millis(student_data[2].parse::<u64>().unwrap()),
+        );
+        record
+    }
+
+    fn create_record(&self, msg: &str, from: SocketAddr) -> Record {
+        let student_data: Vec<&str> = msg.split(",").collect();
+        let record = Record::new(
+            from.to_string().into(),
+            RecordData::CreateStudent(
+                student_data[0].into(),
+                student_data[1].parse::<u32>().unwrap(),
+            ),
+            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(),
+        );
+        record
     }
 }
