@@ -75,7 +75,7 @@ impl Coordinator {
                                 }
                                 None => {
                                     println!(
-                                        "[COORDINATOR] Seteando como lider a: {:?}",
+                                        "[COORDINATOR] Seteando como lider a: {}",
                                         new_node_bully_addr
                                     );
                                     *current_leader.lock().unwrap() =

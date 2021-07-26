@@ -51,7 +51,6 @@ impl Node {
             .expect("No leader addr");
 
         println!("Leader address: {}", leader_addr);
-
         let i_am_leader = leader_addr == self.bully_sock.local_addr().unwrap().to_string();
 
         match i_am_leader {
@@ -94,7 +93,6 @@ impl Node {
             match msg.as_str() {
                 NEW_NODE => {
                     other_nodes = self.recv_all_addr(other_nodes.clone(), self.bully_sock.try_clone().unwrap());
-                    //println!("{:?}", other_nodes);
                 }
                 BLOCKCHAIN => {
                     self.blockchain = self.recv_blockchain(self.bully_sock.try_clone().unwrap());
@@ -122,7 +120,6 @@ impl Node {
     pub fn run_bully_as_leader(&mut self, stdin_buf: Arc<Mutex<Option<String>>>) {
         println!("Soy el líder!");
         let mut other_nodes: Vec<SocketAddr> = vec![];
-        let mut propagated_msgs = 0;
         let clone_socket = self.bully_sock.try_clone().unwrap();
         let tmp = self.bully_sock.local_addr().unwrap();
 
@@ -143,9 +140,6 @@ impl Node {
         
         loop {
             let (msg, from)= self.read_from();
-            if propagated_msgs == 10 {
-                break;
-            }
             match msg.as_str() {
                 REGISTER_MSG => {
                     println!("Registrando nodo: {}", from);
@@ -156,7 +150,7 @@ impl Node {
                     }
                     println!("{:?}", other_nodes);
                 }
-                "close_leader" => {
+                CLOSE_LEADER => {
                     break;
                 }
                 CLOSE => {
@@ -177,7 +171,6 @@ impl Node {
                     } else {
                         println!("{}", self.blockchain);
                     }
-                    propagated_msgs += 1;
                 }
             }
         }
@@ -207,7 +200,6 @@ impl Node {
     /// Contacts the coordinator to get the current leader_addr
     fn fetch_leader_addr(&mut self) {
         println!("Enviando mensaje de discovery");
-
 
         // Sends a NEW_NODE_MSG to the coordinator
         self.writer.write_all(NEW_NODE_MSG.as_bytes()).unwrap();
@@ -262,11 +254,9 @@ impl Node {
             }
             let mut block = Block::new(blockchain.get_last_block_hash());
             block.add_record(self.read_record(msg));
-            if let Err(err) = blockchain.append_block(block)
-            {
+            if let Err(err) = blockchain.append_block(block) {
                 println!("{}", err);
-            }
-            else {
+            } else {
                 println!("{}", blockchain);
             }
         }

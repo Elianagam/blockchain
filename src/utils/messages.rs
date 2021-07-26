@@ -8,6 +8,7 @@ pub const RELEASE_MSG: &str = "release\n";
 pub const DISCONNECT_MSG: &str = "";
 pub const BLOCKCHAIN: &str = "blockchain";
 pub const CLOSE: &str = "close";
+pub const CLOSE_LEADER: &str = "close_leader";
 pub const NEW_NODE_MSG: &str = "discover\n";
 pub const BLOCKCHAIN_MSG: &str = "blockchain";
 

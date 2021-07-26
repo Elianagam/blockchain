@@ -28,7 +28,7 @@ use std::io::{self, BufRead};
 use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use messages::CLOSE;
+use messages::{CLOSE, CLOSE_LEADER};
 
 fn usage() -> i32 {
     println!("Usage: cargo r --bin node");
@@ -42,7 +42,7 @@ fn read_stdin(stdin_buffer: Arc<Mutex<Option<String>>>) {
         let line = iterator.next().unwrap().unwrap();
 
         let student_data: Vec<&str> = line.split(",").collect();
-        if (student_data.len() == 1 && student_data[0].contains(CLOSE)) || student_data.len() == 2 {
+        if (student_data.len() == 1 && (student_data[0] == CLOSE || student_data[0] == CLOSE_LEADER)) || student_data.len() == 2 {
             *(&stdin_buffer).lock().unwrap() = Some(line);
         } else {
             println!("Unsupported data format, usage: id, qualification")
