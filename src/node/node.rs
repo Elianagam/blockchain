@@ -108,11 +108,6 @@ impl Node {
                     block.add_record(record);
                     self.blockchain.append_block(block);
                     println!("{}", self.blockchain);
-                    // DEBUGING blockchain
-                    // TODO: add to logger
-                    /*for block in &self.blockchain.blocks {
-                        println!("{:#?}", block);
-                    }*/
                 }
             }
         }
