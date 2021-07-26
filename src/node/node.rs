@@ -247,7 +247,7 @@ impl Node {
                 println!("{}", err);
             }
             else {
-                println!("{}", self.blockchain);
+                println!("{}", blockchain);
             }
         }
         blockchain
