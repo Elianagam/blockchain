@@ -96,8 +96,7 @@ impl Node {
 
             match msg.as_str() {
                 NEW_NODE => {
-                    other_nodes = self
-                        .recv_all_addr(other_nodes.clone(), self.bully_sock.try_clone().unwrap());
+                    other_nodes = self.recv_all_addr(other_nodes.clone(), self.bully_sock.try_clone().unwrap());
                     println!("{:?}", other_nodes);
                 }
                 BLOCKCHAIN => {
@@ -107,17 +106,15 @@ impl Node {
                     break;
                 }
                 msg => {
-                    println!("Recibido {}", &msg);
                     let record = self.create_record(msg, self.bully_sock.try_clone().unwrap().local_addr().unwrap());
                     let mut block = Block::new(self.blockchain.get_last_block_hash());
                     block.add_record(record);
                     self.blockchain.append_block(block);
-
                     println!("{}", self.blockchain);
                 }
             }
         }
-        println!("{:}", self.blockchain);
+        println!("{}", self.blockchain);
         println!("Desconectando...");
         process::exit(-1);
     }
@@ -141,15 +138,8 @@ impl Node {
                     println!("Registrando nodo: {}", from);
                     if !&other_nodes.contains(&from) {
                         other_nodes.push(from);
-                        self.send_all_addr(
-                            other_nodes.clone(),
-                            self.bully_sock.try_clone().unwrap(),
-                        );
-                        self.send_blockchain(
-                            self.blockchain.clone(),
-                            from,
-                            self.bully_sock.try_clone().unwrap(),
-                        );
+                        self.send_all_addr(other_nodes.clone(),self.bully_sock.try_clone().unwrap());
+                        self.send_blockchain(self.blockchain.clone(),from,self.bully_sock.try_clone().unwrap());
                     }
                     println!("{:?}", other_nodes);
                 }
