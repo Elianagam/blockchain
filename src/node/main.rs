@@ -30,7 +30,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 
-
 fn usage() -> i32 {
     println!("Usage: cargo r --bin node");
     return -1;
@@ -55,13 +54,10 @@ fn main() -> Result<(), ()> {
         let line = iterator.next().unwrap().unwrap();
 
         let student_data:Vec<&str>= line.split(",").collect();
-        if student_data.len() != 2
-        {
-            println!("Unsupported data format, usage: id, qualification")
-        }
-        else
-        {
+        if (student_data.len() == 1 && student_data[0] == "close" ) || student_data.len() == 2 {
             *(&stdin_buffer).lock().unwrap() = Some(line);
+        } else {
+            println!("Unsupported data format, usage: id, qualification")
         }
     }
 

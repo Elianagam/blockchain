@@ -97,9 +97,6 @@ impl Node {
                 leader_addr.as_str(),
             )
             .unwrap();
-       /* self.bully_sock
-            .send_to(&encode_to_bytes(PING_MSG), leader_addr.as_str())
-            .unwrap();*/
 
         loop {
             let mut buf = [0; 128];
