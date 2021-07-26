@@ -1,5 +1,5 @@
 use crate::logger::Logger;
-use crate::messages::{ACQUIRE_MSG, DISCONNECT_MSG, DISCOVER_MSG, RELEASE_MSG};
+use crate::messages::{ACQUIRE_MSG, DISCONNECT_MSG, NEW_NODE_MSG, RELEASE_MSG};
 use crate::node_accepted::NodeAccepted;
 
 use std::net::TcpListener;
@@ -63,7 +63,7 @@ impl Coordinator {
                                 mine = false;
                             }
                         }
-                        DISCOVER_MSG => {
+                        NEW_NODE_MSG => {
                             println!("[COORDINATOR] Nuevo nodo conectado");
                             let new_node_bully_addr = node.read();
                             let tmp = (*current_leader).lock().unwrap().clone();

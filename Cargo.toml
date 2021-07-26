@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 std-semaphore = "0.1"
+blake2 = "*"
 
 [[bin]]
 name = "coordinator"

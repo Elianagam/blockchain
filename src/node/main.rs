@@ -4,7 +4,22 @@ mod logger;
 #[path = "../utils/messages.rs"]
 mod messages;
 
+#[path = "blockchain/block.rs"]
+mod block;
+use block::Block;
+
+#[path = "blockchain/blockchain.rs"]
 mod blockchain;
+use blockchain::Blockchain;
+
+#[path = "blockchain/student.rs"]
+mod student;
+use student::Student;
+
+#[path = "blockchain/record.rs"]
+mod record;
+use record::Record;
+
 mod encoder;
 mod node;
 
@@ -36,7 +51,13 @@ fn main() -> Result<(), ()> {
         let stdin = io::stdin();
         let mut iterator = stdin.lock().lines();
         let line = iterator.next().unwrap().unwrap();
-        *(&stdin_buffer).lock().unwrap() = Some(line);
+
+        let student_data: Vec<&str> = line.split(",").collect();
+        if (student_data.len() == 1 && student_data[0] == "close") || student_data.len() == 2 {
+            *(&stdin_buffer).lock().unwrap() = Some(line);
+        } else {
+            println!("Unsupported data format, usage: id, qualification")
+        }
     }
 
     t.join().unwrap();
