@@ -31,12 +31,8 @@ impl WorldState for Blockchain {
     }
 
     fn create_student(&mut self, id: String, qualification: u32) -> Result<(), &'static str> {
-        return if !self.get_student_ids().contains(&id) {
-            let acc = Student::new(qualification);
-            self.students.insert(id, acc);
-            Ok(())
-        } else {
-            Err("User already exists! (Code: 934823094)")
-        };
+        let acc = Student::new(qualification);
+        self.students.insert(id, acc);
+        Ok(())
     }
 }
