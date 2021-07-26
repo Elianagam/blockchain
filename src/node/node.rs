@@ -11,7 +11,6 @@ use crate::record::{Record, RecordData};
 use crate::encoder::Encoder;
 use crate::messages::{BLOCKCHAIN, CLOSE, END, NEW_NODE, NEW_NODE_MSG, PING_MSG, REGISTER_MSG};
 use std::net::{SocketAddr, UdpSocket};
-use serde_json::Serializer;
 
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
@@ -124,10 +123,10 @@ impl Node {
                     let student_data:Vec<&str>= msg.split(",").collect();
                     println!("Recibido {}", &msg);
                     let mut block = Block::new(blockchain.get_last_block_hash());
-                    let create_student = Record::new("Client1".into(), 
+                    let create_student = Record::new(socket.try_clone().unwrap().local_addr().unwrap().to_string().into(), 
                                                 RecordData::CreateStudent(student_data[0].into(), 
                                                 student_data[1].parse::<u32>().unwrap()),
-                                            SystemTime::now());
+                                                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap());
                     block.add_record(create_student);
                     blockchain.append_block(block);
      
@@ -185,10 +184,10 @@ impl Node {
                     let student_data:Vec<&str>= msg.split(",").collect();
                     println!("Recibido {}", &msg);
                     let mut block = Block::new(blockchain.get_last_block_hash());
-                    let create_student = Record::new("Client1".into(), 
+                    let create_student = Record::new(from.to_string().into(), 
                                                 RecordData::CreateStudent(student_data[0].into(), 
                                                 student_data[1].parse::<u32>().unwrap()),
-                                                SystemTime::now());
+                                                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap());
                     block.add_record(create_student);
                     blockchain.append_block(block);
 
@@ -232,10 +231,25 @@ impl Node {
         socket
             .send_to(&encode_to_bytes(BLOCKCHAIN), from)
             .unwrap();
-        for b in blockchain.blocks {
-            let block_as_string = serde_json::to_string(&b).unwrap();
+        for b in blockchain.blocks { 
+
+            let mut data_to_send = "".to_string();
+
+            match &b.records[0].record {
+                RecordData::CreateStudent(id, qualification) => {
+                   let separator = "".to_string();
+                   data_to_send.push_str(&id);
+                   data_to_send.push_str(&separator);
+                   data_to_send.push_str(&(qualification.to_string()));
+                   data_to_send.push_str(&separator);
+                   data_to_send.push_str(&b.records[0].created_at.as_millis().to_string());
+                   data_to_send.push_str(&separator);
+                   data_to_send.push_str(&b.records[0].from);
+                }
+            };
+
             socket
-                .send_to(&Encoder::encode_to_bytes(&b.data), from)
+                .send_to(&Encoder::encode_to_bytes(&data_to_send), from)
                 .unwrap();
         }
         socket
@@ -252,7 +266,17 @@ impl Node {
             if block == END {
                 break;
             }
-            let block: Block = serde_json::from_str(&msg).unwrap();
+
+            let student_data:Vec<&str>= msg.split(",").collect();
+
+
+            let record = Record::new(student_data[3].into(), 
+                                RecordData::CreateStudent(student_data[0].into(), 
+                                student_data[1].parse::<u32>().unwrap()),
+                                Duration::from_millis(student_data[2].parse::<u64>().unwrap()));
+            
+            let mut block = Block::new(blockchain.get_last_block_hash());
+            block.add_record(record);
 
             blockchain.append_block(block);
         }

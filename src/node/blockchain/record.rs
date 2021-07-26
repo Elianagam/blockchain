@@ -1,38 +1,36 @@
-use std::time::SystemTime;
+use std::time::Duration;
 mod world_state;
 use world_state::WorldState;
 use blake2::{Blake2b, Digest};
-use serde::{Serialize, Deserialize};
-
 
 /// Request to the blockchain
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Record {
     /// Client ID
     pub from: String,
 
-    /// The time the record was created
-    pub created_at: SystemTime,
+    /// The duration since EPOCH (when it was created)
+    pub created_at: Duration,
 
     /// The type of the record and its additional information
     pub(crate) record: RecordData,
 }
 
 /// The operation to be stored on the chain
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum RecordData {
 
     CreateStudent(String, u32),
 
-    UpdateQualification { student: String, qualification: u32 },
+    //UpdateQualification { student: String, qualification: u32 },
 }
 
 impl Record {
-    pub fn new(from: String, record_data: RecordData, time: SystemTime) -> Self {
+    pub fn new(from: String, record_data: RecordData, time: Duration) -> Self {
         Record {
             from,
             record: record_data,
-            created_at: time //SystemTime::now()
+            created_at: time 
         }
     }
 
@@ -47,7 +45,7 @@ impl Record {
                 world_state.create_student(id.into(), *qualification)
             }
 
-            RecordData::UpdateQualification { student, qualification } => {
+            /*RecordData::UpdateQualification { student, qualification } => {
                 // Get the student (must exist)
                 return if let Some(student) = world_state.get_student_by_id_mut(student) {
                     student.qualification = *qualification;
@@ -55,7 +53,7 @@ impl Record {
                 } else {
                     Err("Student does not exist")
                 };
-            }
+            }*/
         };
     }
 

@@ -2,10 +2,9 @@ extern crate blake2;
 use blake2::{Blake2b, Digest};
 
 use crate::Record;
-use serde::{Serialize, Deserialize};
 
 /// One single part of the blockchain that contains a list of records
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Block {
     /// Actions that this block includes (at least one)
     pub(crate) records: Vec<Record>,
