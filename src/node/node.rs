@@ -106,8 +106,13 @@ impl Node {
                     let record = self.create_record(msg, self.bully_sock.try_clone().unwrap().local_addr().unwrap());
                     let mut block = Block::new(self.blockchain.get_last_block_hash());
                     block.add_record(record);
-                    self.blockchain.append_block(block);
-                    println!("{}", self.blockchain);
+                    if let Err(err) = self.blockchain.append_block(block)
+                    {
+                        println!("{}", err);
+                    }
+                    else {
+                        println!("{}", self.blockchain);
+                    }
                 }
             }
         }
@@ -148,7 +153,14 @@ impl Node {
                     }
                     let mut block = Block::new(self.blockchain.get_last_block_hash());
                     block.add_record(self.create_record(msg, from));
-                    self.blockchain.append_block(block);
+
+                    if let Err(err) = self.blockchain.append_block(block)
+                    {
+                        println!("{}", err);
+                    }
+                    else {
+                        println!("{}", self.blockchain);
+                    }
                     propagated_msgs += 1;
                 }
             }
@@ -230,7 +242,13 @@ impl Node {
             }
             let mut block = Block::new(blockchain.get_last_block_hash());
             block.add_record(self.read_record(msg));
-            blockchain.append_block(block);
+            if let Err(err) = blockchain.append_block(block)
+            {
+                println!("{}", err);
+            }
+            else {
+                println!("{}", self.blockchain);
+            }
         }
         blockchain
     }
