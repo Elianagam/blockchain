@@ -108,6 +108,11 @@ impl Node {
                     block.add_record(record);
                     self.blockchain.append_block(block);
                     println!("{}", self.blockchain);
+                    // DEBUGING blockchain
+                    // TODO: add to logger
+                    /*for block in &self.blockchain.blocks {
+                        println!("{:#?}", block);
+                    }*/
                 }
             }
         }
@@ -202,7 +207,7 @@ impl Node {
                 RecordData::CreateStudent(id, qualification) => {
                     data_to_send.push_str(
                         &(format!(
-                            "{} {} {} {}",
+                            "{},{},{},{}",
                             &id,
                             &(qualification.to_string()),
                             &b.records[0].created_at.as_millis().to_string(),
