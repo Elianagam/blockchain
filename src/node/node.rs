@@ -112,12 +112,9 @@ impl Node {
                     let mut block = Block::new(self.blockchain.get_last_block_hash());
                     let create_student = Record::new(
                         self.bully_sock
-                            .try_clone()
-                            .unwrap()
-                            .local_addr()
-                            .unwrap()
-                            .to_string()
-                            .into(),
+                            .try_clone().unwrap()
+                            .local_addr().unwrap()
+                            .to_string().into(),
                         RecordData::CreateStudent(
                             student_data[0].into(),
                             student_data[1].parse::<u32>().unwrap(),
@@ -170,39 +167,35 @@ impl Node {
                     }
                 }
                 CLOSE => {
-                    self.bully_sock
-                        .send_to(&encode_to_bytes(&msg), from)
-                        .unwrap();
+                    self.bully_sock.send_to(&encode_to_bytes(&msg), from).unwrap();
                     other_nodes.retain(|&x| x != from);
                     self.send_all_addr(other_nodes.clone(), self.bully_sock.try_clone().unwrap());
                 }
                 msg => {
                     println!("Propagando cambios {:?} al resto de los nodos", msg);
                     for node in &other_nodes {
-                        self.bully_sock
-                            .send_to(&encode_to_bytes(msg), node)
-                            .unwrap();
+                        self.bully_sock.send_to(&encode_to_bytes(msg), node).unwrap();
                     }
-                    let student_data: Vec<&str> = msg.split(",").collect();
-                    println!("Recibido {}", &msg);
-                    let mut block = Block::new(self.blockchain.get_last_block_hash());
-                    let create_student = Record::new(
-                        from.to_string().into(),
-                        RecordData::CreateStudent(
-                            student_data[0].into(),
-                            student_data[1].parse::<u32>().unwrap(),
-                        ),
-                        SystemTime::now()
-                            .duration_since(SystemTime::UNIX_EPOCH)
-                            .unwrap(),
-                    );
-                    block.add_record(create_student);
-                    self.blockchain.append_block(block);
-
+                    self.blockchain.append_block(self.create_block(msg, from));
                     propagated_msgs += 1;
                 }
             }
         }
+    }
+
+    fn create_block(&self, msg: &str, from: SocketAddr) -> Block {
+        let student_data: Vec<&str> = msg.split(",").collect();
+        let create_student = Record::new(
+            from.to_string().into(),
+            RecordData::CreateStudent(
+                student_data[0].into(),
+                student_data[1].parse::<u32>().unwrap(),
+            ),
+            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(),
+        );
+        let mut block = Block::new(self.blockchain.get_last_block_hash());
+        block.add_record(create_student);
+        block
     }
 
     fn _acquire(&mut self) {
@@ -274,9 +267,9 @@ impl Node {
             }
 
             let student_data: Vec<&str> = msg.split(",").collect();
-            if student_data.len() == 2 {
+            if student_data.len() == 4 {
                 let record = Record::new(
-                    student_data[0].into(),
+                    student_data[3].into(),
                     RecordData::CreateStudent(
                         student_data[0].into(),
                         student_data[1].parse::<u32>().unwrap(),
