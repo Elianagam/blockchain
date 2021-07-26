@@ -107,23 +107,10 @@ impl Node {
                     break;
                 }
                 msg => {
-                    let student_data: Vec<&str> = msg.split(",").collect();
                     println!("Recibido {}", &msg);
+                    let record = self.create_record(msg, self.bully_sock.try_clone().unwrap().local_addr().unwrap());
                     let mut block = Block::new(self.blockchain.get_last_block_hash());
-                    let create_student = Record::new(
-                        self.bully_sock
-                            .try_clone().unwrap()
-                            .local_addr().unwrap()
-                            .to_string().into(),
-                        RecordData::CreateStudent(
-                            student_data[0].into(),
-                            student_data[1].parse::<u32>().unwrap(),
-                        ),
-                        SystemTime::now()
-                            .duration_since(SystemTime::UNIX_EPOCH)
-                            .unwrap(),
-                    );
-                    block.add_record(create_student);
+                    block.add_record(record);
                     self.blockchain.append_block(block);
 
                     println!("{}", self.blockchain);
@@ -148,7 +135,6 @@ impl Node {
             if propagated_msgs == 10 {
                 break;
             }
-            println!("{:?}", other_nodes);
 
             match msg.as_str() {
                 REGISTER_MSG => {
@@ -165,6 +151,7 @@ impl Node {
                             self.bully_sock.try_clone().unwrap(),
                         );
                     }
+                    println!("{:?}", other_nodes);
                 }
                 CLOSE => {
                     self.bully_sock.send_to(&encode_to_bytes(&msg), from).unwrap();
