@@ -1,16 +1,15 @@
 use std::io::{BufRead, BufReader, Write};
-use std::net::{TcpStream, SocketAddr, UdpSocket};
+use std::net::{SocketAddr, TcpStream, UdpSocket};
 use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime};
 
-use crate::blockchain::Blockchain;
 use crate::block::Block;
-use crate::record::{Record, RecordData};
-use crate::encoder::{encode_to_bytes, decode_from_bytes};
+use crate::blockchain::Blockchain;
+use crate::encoder::{decode_from_bytes, encode_to_bytes};
 use crate::messages::*;
-
+use crate::record::{Record, RecordData};
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
 
@@ -39,11 +38,7 @@ impl Node {
         }
     }
 
-    pub fn run(
-        &mut self,
-        stdin_buf: Arc<Mutex<Option<String>>>,
-    ) -> () {
-
+    pub fn run(&mut self, stdin_buf: Arc<Mutex<Option<String>>>) -> () {
         self.fetch_leader_addr();
 
         // FIXME: usar condvars
@@ -54,7 +49,7 @@ impl Node {
         let leader_addr = (*self.leader_addr.lock().unwrap())
             .clone()
             .expect("No leader addr");
-        
+
         println!("Leader address: {}", leader_addr);
 
         let i_am_leader = leader_addr == self.bully_sock.local_addr().unwrap().to_string();
@@ -91,10 +86,7 @@ impl Node {
         });
 
         self.bully_sock
-            .send_to(
-                &encode_to_bytes(REGISTER_MSG),
-                leader_addr.as_str(),
-            )
+            .send_to(&encode_to_bytes(REGISTER_MSG), leader_addr.as_str())
             .unwrap();
 
         loop {
@@ -104,8 +96,8 @@ impl Node {
 
             match msg.as_str() {
                 NEW_NODE => {
-                    other_nodes =
-                        self.recv_all_addr(other_nodes.clone(), self.bully_sock.try_clone().unwrap());
+                    other_nodes = self
+                        .recv_all_addr(other_nodes.clone(), self.bully_sock.try_clone().unwrap());
                     println!("{:?}", other_nodes);
                 }
                 BLOCKCHAIN => {
@@ -115,16 +107,28 @@ impl Node {
                     break;
                 }
                 msg => {
-                    let student_data:Vec<&str>= msg.split(",").collect();
+                    let student_data: Vec<&str> = msg.split(",").collect();
                     println!("Recibido {}", &msg);
                     let mut block = Block::new(self.blockchain.get_last_block_hash());
-                    let create_student = Record::new(self.bully_sock.try_clone().unwrap().local_addr().unwrap().to_string().into(), 
-                                                RecordData::CreateStudent(student_data[0].into(), 
-                                                student_data[1].parse::<u32>().unwrap()),
-                                                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap());
+                    let create_student = Record::new(
+                        self.bully_sock
+                            .try_clone()
+                            .unwrap()
+                            .local_addr()
+                            .unwrap()
+                            .to_string()
+                            .into(),
+                        RecordData::CreateStudent(
+                            student_data[0].into(),
+                            student_data[1].parse::<u32>().unwrap(),
+                        ),
+                        SystemTime::now()
+                            .duration_since(SystemTime::UNIX_EPOCH)
+                            .unwrap(),
+                    );
                     block.add_record(create_student);
                     self.blockchain.append_block(block);
-     
+
                     println!("{}", self.blockchain);
                 }
             }
@@ -134,10 +138,7 @@ impl Node {
         process::exit(-1);
     }
 
-    pub fn run_bully_as_leader(
-        &mut self,
-        _stdin_buf: Arc<Mutex<Option<String>>>,
-    ) {
+    pub fn run_bully_as_leader(&mut self, _stdin_buf: Arc<Mutex<Option<String>>>) {
         println!("Soy el líder!");
         let mut other_nodes: Vec<SocketAddr> = vec![];
         let mut propagated_msgs = 0;
@@ -157,8 +158,15 @@ impl Node {
                     println!("Registrando nodo: {}", from);
                     if !&other_nodes.contains(&from) {
                         other_nodes.push(from);
-                        self.send_all_addr(other_nodes.clone(), self.bully_sock.try_clone().unwrap());
-                        self.send_blockchain(self.blockchain.clone(), from, self.bully_sock.try_clone().unwrap());
+                        self.send_all_addr(
+                            other_nodes.clone(),
+                            self.bully_sock.try_clone().unwrap(),
+                        );
+                        self.send_blockchain(
+                            self.blockchain.clone(),
+                            from,
+                            self.bully_sock.try_clone().unwrap(),
+                        );
                     }
                 }
                 CLOSE => {
@@ -175,13 +183,19 @@ impl Node {
                             .send_to(&encode_to_bytes(msg), node)
                             .unwrap();
                     }
-                    let student_data:Vec<&str>= msg.split(",").collect();
+                    let student_data: Vec<&str> = msg.split(",").collect();
                     println!("Recibido {}", &msg);
                     let mut block = Block::new(self.blockchain.get_last_block_hash());
-                    let create_student = Record::new(from.to_string().into(), 
-                                                RecordData::CreateStudent(student_data[0].into(), 
-                                                student_data[1].parse::<u32>().unwrap()),
-                                                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap());
+                    let create_student = Record::new(
+                        from.to_string().into(),
+                        RecordData::CreateStudent(
+                            student_data[0].into(),
+                            student_data[1].parse::<u32>().unwrap(),
+                        ),
+                        SystemTime::now()
+                            .duration_since(SystemTime::UNIX_EPOCH)
+                            .unwrap(),
+                    );
                     block.add_record(create_student);
                     self.blockchain.append_block(block);
 
@@ -210,7 +224,9 @@ impl Node {
         self.writer.write_all(NEW_NODE_MSG.as_bytes()).unwrap();
         // Sends the bully_addr to the coordinator so that he can use it if no leader exists yet
         self.writer
-            .write_all(&encode_to_bytes(self.bully_sock.local_addr().unwrap().to_string().as_str()))
+            .write_all(&encode_to_bytes(
+                self.bully_sock.local_addr().unwrap().to_string().as_str(),
+            ))
             .unwrap();
 
         // The coordinator will answer with the bully_addr of the leader (mine or other)
@@ -222,23 +238,21 @@ impl Node {
     }
 
     fn send_blockchain(&self, blockchain: Blockchain, from: SocketAddr, socket: UdpSocket) {
-        socket
-            .send_to(&encode_to_bytes(BLOCKCHAIN), from)
-            .unwrap();
-        for b in blockchain.blocks { 
-
+        socket.send_to(&encode_to_bytes(BLOCKCHAIN), from).unwrap();
+        for b in blockchain.blocks {
             let mut data_to_send = "".to_string();
 
             match &b.records[0].record {
                 RecordData::CreateStudent(id, qualification) => {
-                   let separator = "".to_string();
-                   data_to_send.push_str(&id);
-                   data_to_send.push_str(&separator);
-                   data_to_send.push_str(&(qualification.to_string()));
-                   data_to_send.push_str(&separator);
-                   data_to_send.push_str(&b.records[0].created_at.as_millis().to_string());
-                   data_to_send.push_str(&separator);
-                   data_to_send.push_str(&b.records[0].from);
+                    data_to_send.push_str(
+                        &(format!(
+                            "{} {} {} {}",
+                            &id,
+                            &(qualification.to_string()),
+                            &b.records[0].created_at.as_millis().to_string(),
+                            &b.records[0].from
+                        )),
+                    );
                 }
             };
 
@@ -246,9 +260,7 @@ impl Node {
                 .send_to(&encode_to_bytes(&data_to_send), from)
                 .unwrap();
         }
-        socket
-            .send_to(&encode_to_bytes(END), from)
-            .unwrap();
+        socket.send_to(&encode_to_bytes(END), from).unwrap();
     }
 
     fn recv_blockchain(&self, socket: UdpSocket) -> Blockchain {
@@ -261,18 +273,21 @@ impl Node {
                 break;
             }
 
-            let student_data:Vec<&str>= msg.split(",").collect();
+            let student_data: Vec<&str> = msg.split(",").collect();
+            if student_data.len() == 2 {
+                let record = Record::new(
+                    student_data[0].into(),
+                    RecordData::CreateStudent(
+                        student_data[0].into(),
+                        student_data[1].parse::<u32>().unwrap(),
+                    ),
+                    Duration::from_millis(student_data[2].parse::<u64>().unwrap()),
+                );
+                let mut block = Block::new(blockchain.get_last_block_hash());
+                block.add_record(record);
 
-
-            let record = Record::new(student_data[3].into(), 
-                                RecordData::CreateStudent(student_data[0].into(), 
-                                student_data[1].parse::<u32>().unwrap()),
-                                Duration::from_millis(student_data[2].parse::<u64>().unwrap()));
-            
-            let mut block = Block::new(blockchain.get_last_block_hash());
-            block.add_record(record);
-
-            blockchain.append_block(block);
+                blockchain.append_block(block);
+            }
         }
         blockchain
     }

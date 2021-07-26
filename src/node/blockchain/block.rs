@@ -13,7 +13,7 @@ pub struct Block {
     pub prev_hash: Option<String>,
 
     /// Hash of the current block (in order to save the last block from being tampered)
-    pub hash: Option<String>
+    pub hash: Option<String>,
 }
 
 impl Block {
@@ -61,7 +61,9 @@ impl Block {
         if self.hash.is_some() && // Hash set
             self.hash.as_ref().unwrap().eq(
                 &byte_vector_to_string(
-                    &self.calculate_hash())) { // Hash equals calculated hash
+                    &self.calculate_hash()))
+        {
+            // Hash equals calculated hash
 
             return true;
         }

@@ -1,12 +1,12 @@
 use crate::Block;
-use crate::Student;
 use crate::Record;
-use std::vec::Vec;
+use crate::Student;
 use std::collections::HashMap;
 use std::convert::Into;
-use std::fmt::Formatter;
 use std::fmt;
 use std::fmt::Display;
+use std::fmt::Formatter;
+use std::vec::Vec;
 
 /// The Blockchain container
 #[derive(Debug, Clone)]
@@ -33,7 +33,6 @@ impl Blockchain {
 
     /// Adds a block to the Blockchain
     pub fn append_block(&mut self, block: Block) -> Result<(), String> {
-
         // Checks if the hash matches the records
         if !block.verify_own_hash() {
             return Err("The block hash is mismatching!".into());
@@ -54,14 +53,17 @@ impl Blockchain {
 
         // Executes each transaction
         for (i, transaction) in block.records.iter().enumerate() {
-
             // Execute the transaction
             if let Err(err) = transaction.execute(self) {
                 // Recover state on failure
                 self.students = old_state;
 
                 // ... and reject the block
-                return Err(format!("Could not execute transaction {} due to `{}`. Rolling back", i + 1, err));
+                return Err(format!(
+                    "Could not execute transaction {} due to `{}`. Rolling back",
+                    i + 1,
+                    err
+                ));
             }
         }
 
@@ -88,11 +90,14 @@ impl Blockchain {
     /// Returns the description of the error if the blockchain was tampered or OK in other case
     pub fn check_validity(&self) -> Result<(), String> {
         for (block_num, block) in self.blocks.iter().enumerate() {
-
             // Check if block saved hash matches to calculated hash
             if !block.verify_own_hash() {
-                return Err(format!("Stored hash for Block #{} \
-                    does not match calculated hash", block_num + 1).into());
+                return Err(format!(
+                    "Stored hash for Block #{} \
+                    does not match calculated hash",
+                    block_num + 1
+                )
+                .into());
             }
 
             // Check previous black hash points to actual previous block
@@ -100,7 +105,8 @@ impl Blockchain {
                 // First block should point to nowhere
                 if block.prev_hash.is_some() {
                     return Err("The first block has a previous hash set which \
-                     it shouldn't".into());
+                     it shouldn't"
+                        .into());
                 }
             } else {
                 // Other blocks should point to previous blocks hash
@@ -113,9 +119,12 @@ impl Blockchain {
                 let prev_hash_actual = self.blocks[block_num - 1].hash.as_ref().unwrap();
 
                 if !(&block.prev_hash == &self.blocks[block_num - 1].hash) {
-                    return Err(format!("Block #{} is not connected to previous block (Hashes do \
-                    not match. Should be `{}` but is `{}`)", block_num, prev_hash_proposed,
-                                       prev_hash_actual).into());
+                    return Err(format!(
+                        "Block #{} is not connected to previous block (Hashes do \
+                    not match. Should be `{}` but is `{}`)",
+                        block_num, prev_hash_proposed, prev_hash_actual
+                    )
+                    .into());
                 }
             }
         }

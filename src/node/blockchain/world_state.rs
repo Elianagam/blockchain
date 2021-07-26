@@ -1,5 +1,5 @@
-use crate::Student;
 use crate::Blockchain;
+use crate::Student;
 
 /// The current state of the blockchain after all Blocks are executed
 /// Expected interface into the Blockchain

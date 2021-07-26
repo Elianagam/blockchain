@@ -1,5 +1,5 @@
 use crate::logger::Logger;
-use crate::messages::{ACQUIRE_MSG, DISCONNECT_MSG,NEW_NODE_MSG, RELEASE_MSG};
+use crate::messages::{ACQUIRE_MSG, DISCONNECT_MSG, NEW_NODE_MSG, RELEASE_MSG};
 use crate::node_accepted::NodeAccepted;
 
 use std::net::TcpListener;
