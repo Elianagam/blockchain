@@ -121,30 +121,30 @@ impl Node {
         process::exit(-1);
     }
 
-    pub fn run_bully_as_leader(&mut self, _stdin_buf: Arc<Mutex<Option<String>>>) {
+    pub fn run_bully_as_leader(&mut self, stdin_buf: Arc<Mutex<Option<String>>>) {
         println!("Soy el líder!");
         let mut other_nodes: Vec<SocketAddr> = vec![];
         let mut propagated_msgs = 0;
+        let clone_other_nodes = other_nodes.clone();
+        let clone_socket = self.bully_sock.try_clone().unwrap();
 
-        /*
-        let value = (*stdin_buf.lock().unwrap()).clone();
+        //TODO. sacar este busy wait reemplazarlo por condvar
+        thread::spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            let value = (*stdin_buf.lock().unwrap()).clone();
             match value {
-                Some(stdin) => {
-                    match stdin.as_str() {
-                        CLOSE => { break; }
-                        msg => {
-                            blockchain = self.add_block(
-                                &msg,
-                                blockchain.clone(),
-                                other_nodes.clone(),
-                                socket.try_clone().unwrap(),
-                            );
-                        }
+                Some(stdin_msg) => {
+                    for node in &clone_other_nodes {
+                        clone_socket
+                            .send_to(&encode_to_bytes(&stdin_msg), node)
+                            .unwrap();
                     }
+                    *(&stdin_buf).lock().unwrap() = None;
                 }
-                None => {}
+                _ => {}
             }
-        */
+        });
+        
         loop {
             let (msg, from)= self.read_from();
             if propagated_msgs == 10 {
@@ -173,11 +173,9 @@ impl Node {
                     let mut block = Block::new(self.blockchain.get_last_block_hash());
                     block.add_record(self.create_record(msg, from));
 
-                    if let Err(err) = self.blockchain.append_block(block)
-                    {
+                    if let Err(err) = self.blockchain.append_block(block) {
                         println!("{}", err);
-                    }
-                    else {
+                    } else {
                         println!("{}", self.blockchain);
                     }
                     propagated_msgs += 1;
