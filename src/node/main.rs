@@ -4,7 +4,22 @@ mod logger;
 #[path = "../utils/messages.rs"]
 mod messages;
 
+#[path = "blockchain/block.rs"]
+mod block;
+use block::Block;
+
+#[path = "blockchain/blockchain.rs"]
 mod blockchain;
+use blockchain::Blockchain;
+
+#[path = "blockchain/student.rs"]
+mod student;
+use student::Student;
+
+#[path = "blockchain/record.rs"]
+mod record;
+use record::{Record, RecordData};
+
 mod encoder;
 mod node;
 
@@ -13,6 +28,8 @@ use std::io::{self, BufRead};
 use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread;
+
+
 
 fn usage() -> i32 {
     println!("Usage: cargo r --bin node");
@@ -31,12 +48,21 @@ fn main() -> Result<(), ()> {
         let mut node = node::Node::new();
         node.run(tmp);
     });
-
+ 
     for _ in 1..10 {
         let stdin = io::stdin();
         let mut iterator = stdin.lock().lines();
         let line = iterator.next().unwrap().unwrap();
-        *(&stdin_buffer).lock().unwrap() = Some(line);
+
+        let student_data:Vec<&str>= line.split(",").collect();
+        if student_data.len() != 2
+        {
+            println!("Unsupported data format, usage: id, qualification")
+        }
+        else
+        {
+            *(&stdin_buffer).lock().unwrap() = Some(line);
+        }
     }
 
     t.join().unwrap();

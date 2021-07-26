@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 use std::fmt::Display;
-
+/*
 #[derive(Clone)]
 pub struct Block {
     pub data: String,
@@ -45,3 +45,4 @@ impl Display for Block {
         write!(f, "{{data: {:?}}}", self.data.to_string())
     }
 }
+*/

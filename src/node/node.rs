@@ -3,11 +3,16 @@ use std::net::{TcpStream, SocketAddr, UdpSocket};
 use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
-use crate::blockchain::{Block, Blockchain};
-use crate::encoder::{encode_to_bytes, decode_from_bytes};
-use crate::messages::*;
+use crate::blockchain::Blockchain;
+use crate::block::Block;
+use crate::record::{Record, RecordData};
+use crate::encoder::Encoder;
+use crate::messages::{BLOCKCHAIN, CLOSE, END, NEW_NODE, NEW_NODE_MSG, PING_MSG, REGISTER_MSG};
+use std::net::{SocketAddr, UdpSocket};
+use serde_json::Serializer;
+
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
 
@@ -42,6 +47,7 @@ impl Node {
     ) -> () {
 
         self.fetch_leader_addr();
+        let mut blockchain = Blockchain::new();
 
         // FIXME: usar condvars
         while self.leader_addr.lock().unwrap().is_none() {
@@ -51,12 +57,14 @@ impl Node {
         let leader_addr = (*self.leader_addr.lock().unwrap())
             .clone()
             .expect("No leader addr");
+        
+        println!("Leader address: {}", leader_addr);
 
-        let iamleader = leader_addr == self.bully_sock.local_addr().unwrap().to_string();
+        let i_am_leader = leader_addr == bully_sock.local_addr().unwrap().to_string();
 
-        match iamleader {
-            true => self.run_bully_as_leader(stdin_buf),
-            false => self.run_bully_as_non_leader(leader_addr, stdin_buf),
+        match i_am_leader {
+            true => self.run_bully_as_leader(bully_sock, blockchain, stdin_buf),
+            false => self.run_bully_as_non_leader(bully_sock, blockchain, leader_addr, stdin_buf),
         }
     }
 
@@ -113,11 +121,17 @@ impl Node {
                     break;
                 }
                 msg => {
+                    let student_data:Vec<&str>= msg.split(",").collect();
                     println!("Recibido {}", &msg);
-                    self.blockchain.add(Block {
-                        data: msg.to_string(),
-                    });
-                    println!("{}", self.blockchain);
+                    let mut block = Block::new(blockchain.get_last_block_hash());
+                    let create_student = Record::new("Client1".into(), 
+                                                RecordData::CreateStudent(student_data[0].into(), 
+                                                student_data[1].parse::<u32>().unwrap()),
+                                            SystemTime::now());
+                    block.add_record(create_student);
+                    blockchain.append_block(block);
+     
+                    println!("{:#?}", blockchain);
                 }
             }
         }
@@ -168,9 +182,16 @@ impl Node {
                             .send_to(&encode_to_bytes(msg), node)
                             .unwrap();
                     }
-                    self.blockchain.add(Block {
-                        data: msg.to_string(),
-                    });
+                    let student_data:Vec<&str>= msg.split(",").collect();
+                    println!("Recibido {}", &msg);
+                    let mut block = Block::new(blockchain.get_last_block_hash());
+                    let create_student = Record::new("Client1".into(), 
+                                                RecordData::CreateStudent(student_data[0].into(), 
+                                                student_data[1].parse::<u32>().unwrap()),
+                                                SystemTime::now());
+                    block.add_record(create_student);
+                    blockchain.append_block(block);
+
                     propagated_msgs += 1;
                 }
             }
@@ -188,16 +209,18 @@ impl Node {
         self.writer.write_all(RELEASE_MSG.as_bytes()).unwrap();
     }
 
+    /// Contacts the coordinator to get the current leader_addr
     fn fetch_leader_addr(&mut self) {
-        // Pregunta al coordinador la IP del lider actual, si recibimos
-        // nuestra IP entonces somos nosotros.
         println!("Enviando mensaje de discovery");
 
+        // Sends a NEW_NODE_MSG to the coordinator
         self.writer.write_all(NEW_NODE_MSG.as_bytes()).unwrap();
+        // Sends the bully_addr to the coordinator so that he can use it if no leader exists yet
         self.writer
             .write_all(&encode_to_bytes(self.bully_sock.local_addr().unwrap().to_string().as_str()))
             .unwrap();
 
+        // The coordinator will answer with the bully_addr of the leader (mine or other)
         let mut buffer = String::new();
         self.reader.read_line(&mut buffer).unwrap();
         let leader_ip = buffer.split('\n').collect::<Vec<&str>>()[0].to_string();
@@ -209,9 +232,10 @@ impl Node {
         socket
             .send_to(&encode_to_bytes(BLOCKCHAIN), from)
             .unwrap();
-        for b in blockchain.get_blocks() {
+        for b in blockchain.blocks {
+            let block_as_string = serde_json::to_string(&b).unwrap();
             socket
-                .send_to(&encode_to_bytes(&b.data), from)
+                .send_to(&Encoder::encode_to_bytes(&b.data), from)
                 .unwrap();
         }
         socket
@@ -228,7 +252,9 @@ impl Node {
             if block == END {
                 break;
             }
-            blockchain.add(Block { data: block });
+            let block: Block = serde_json::from_str(&msg).unwrap();
+
+            blockchain.append_block(block);
         }
         blockchain
     }
