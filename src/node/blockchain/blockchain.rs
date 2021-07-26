@@ -88,7 +88,7 @@ impl Blockchain {
     }
 
     /// Returns the description of the error if the blockchain was tampered or OK in other case
-    pub fn check_validity(&self) -> Result<(), String> {
+    pub fn _check_validity(&self) -> Result<(), String> {
         for (block_num, block) in self.blocks.iter().enumerate() {
             // Check if block saved hash matches to calculated hash
             if !block.verify_own_hash() {
