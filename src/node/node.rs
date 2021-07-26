@@ -8,9 +8,8 @@ use std::time::{Duration, SystemTime};
 use crate::blockchain::Blockchain;
 use crate::block::Block;
 use crate::record::{Record, RecordData};
-use crate::encoder::Encoder;
-use crate::messages::{BLOCKCHAIN, CLOSE, END, NEW_NODE, NEW_NODE_MSG, PING_MSG, REGISTER_MSG};
-use std::net::{SocketAddr, UdpSocket};
+use crate::encoder::{encode_to_bytes, decode_from_bytes};
+use crate::messages::*;
 
 
 const CTOR_ADDR: &str = "127.0.0.1:8001";
@@ -59,11 +58,11 @@ impl Node {
         
         println!("Leader address: {}", leader_addr);
 
-        let i_am_leader = leader_addr == bully_sock.local_addr().unwrap().to_string();
+        let i_am_leader = leader_addr == self.bully_sock.local_addr().unwrap().to_string();
 
         match i_am_leader {
-            true => self.run_bully_as_leader(bully_sock, blockchain, stdin_buf),
-            false => self.run_bully_as_non_leader(bully_sock, blockchain, leader_addr, stdin_buf),
+            true => self.run_bully_as_leader(stdin_buf),
+            false => self.run_bully_as_non_leader(leader_addr, stdin_buf),
         }
     }
 
@@ -98,9 +97,9 @@ impl Node {
                 leader_addr.as_str(),
             )
             .unwrap();
-        self.bully_sock
+       /* self.bully_sock
             .send_to(&encode_to_bytes(PING_MSG), leader_addr.as_str())
-            .unwrap();
+            .unwrap();*/
 
         loop {
             let mut buf = [0; 128];
@@ -122,21 +121,21 @@ impl Node {
                 msg => {
                     let student_data:Vec<&str>= msg.split(",").collect();
                     println!("Recibido {}", &msg);
-                    let mut block = Block::new(blockchain.get_last_block_hash());
-                    let create_student = Record::new(socket.try_clone().unwrap().local_addr().unwrap().to_string().into(), 
+                    let mut block = Block::new(self.blockchain.get_last_block_hash());
+                    let create_student = Record::new(self.bully_sock.try_clone().unwrap().local_addr().unwrap().to_string().into(), 
                                                 RecordData::CreateStudent(student_data[0].into(), 
                                                 student_data[1].parse::<u32>().unwrap()),
                                                 SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap());
                     block.add_record(create_student);
-                    blockchain.append_block(block);
+                    self.blockchain.append_block(block);
      
-                    println!("{:#?}", blockchain);
+                    println!("{:#?}", self.blockchain);
                 }
             }
         }
         println!("Desconectando...");
         println!("Blockchain:");
-        println!("{}", self.blockchain);
+        println!("{:#?}", self.blockchain);
         process::exit(-1);
     }
 
@@ -183,13 +182,13 @@ impl Node {
                     }
                     let student_data:Vec<&str>= msg.split(",").collect();
                     println!("Recibido {}", &msg);
-                    let mut block = Block::new(blockchain.get_last_block_hash());
+                    let mut block = Block::new(self.blockchain.get_last_block_hash());
                     let create_student = Record::new(from.to_string().into(), 
                                                 RecordData::CreateStudent(student_data[0].into(), 
                                                 student_data[1].parse::<u32>().unwrap()),
                                                 SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap());
                     block.add_record(create_student);
-                    blockchain.append_block(block);
+                    self.blockchain.append_block(block);
 
                     propagated_msgs += 1;
                 }
@@ -249,7 +248,7 @@ impl Node {
             };
 
             socket
-                .send_to(&Encoder::encode_to_bytes(&data_to_send), from)
+                .send_to(&encode_to_bytes(&data_to_send), from)
                 .unwrap();
         }
         socket
@@ -262,8 +261,8 @@ impl Node {
         loop {
             let mut buf = [0; 128];
             let (_, _) = socket.recv_from(&mut buf).unwrap();
-            let block = decode_from_bytes(buf.to_vec());
-            if block == END {
+            let msg = decode_from_bytes(buf.to_vec());
+            if msg == END {
                 break;
             }
 
