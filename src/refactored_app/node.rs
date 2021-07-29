@@ -6,6 +6,7 @@ use std::thread;
 use crate::blockchain::Blockchain;
 use crate::messages::*;
 use std::time::Duration;
+use std::time;
 
 pub struct Node {
     pub my_address: String,
@@ -13,6 +14,7 @@ pub struct Node {
     pub other_nodes: Vec<String>,
     pub leader_addr: Arc<RwLock<Option<String>>>,
     pub blockchain: Blockchain,
+    pub leader_found: bool,
 }
 
 impl Node {
@@ -32,7 +34,8 @@ impl Node {
             socket: UdpSocket::bind(my_address.clone()).unwrap(),
             other_nodes: other_nodes,
             leader_addr: Arc::new(RwLock::new(None)),
-            blockchain: Blockchain::new()
+            blockchain: Blockchain::new(),
+            leader_found: false
         }
     }
 
@@ -53,6 +56,35 @@ impl Node {
             wait_for_leader(pair_clone.clone(), leader_addr.clone());
         });
 
+        let socket_clone= self.socket.try_clone().expect("msg");
+
+        //TODO: meter toda la logica de receive dentro de este thread
+        thread::spawn(move || {
+            loop {
+                let mut buf = [0; 128];
+                let (_, from) = socket_clone.recv_from(&mut buf).unwrap();
+                let msg = decode_from_bytes(buf.to_vec());
+                match msg.as_str() {
+                    WHO_IS_LEADER => {
+                        println!("A node is asking who the leader is");
+                        
+                    }
+                    I_AM_LEADER => {
+                        println!("Someone said he is leader");
+                        
+                    }
+                    CLOSE => {
+                        break;
+                    }
+                    msg => {
+                        println!("Received {}", msg);
+                    }
+                }
+            }
+                
+        });
+
+        // TODO: poner la logica en el thread de arriba, ir haciendo workers para los threads
         loop {
             let (msg, from)= self.read_from();
             match msg.as_str() {
@@ -103,26 +135,28 @@ impl Node {
 
     fn i_am_leader(&self) -> bool {
         println!("my address: {} " , self.my_address);
-        return self.my_address == "127.0.0.1:8080";
-        /*if let Ok(mut leader_addr_mut) = self.leader_addr.read() {
+        //return self.my_address == "127.0.0.1:8080";
+        if let Ok(mut leader_addr_mut) = self.leader_addr.read() {
             if *leader_addr_mut == None 
             {
                 return false;
             }
             println!("Leader addr: {:?}", *leader_addr_mut);
-            return true; //self.my_address == *leader_addr_mut.clone().unwrap();
+            return self.my_address == *leader_addr_mut.clone().unwrap();
         }
         else {
+            // FIXME
             println!("not implemented");
             return false;
-        }*/
+        }
     }
 
     fn leader_found(&self, pair: Arc<(Mutex<bool>, Condvar)>) -> () {
+
         let (lock, cvar) = &*pair;
         let mut leader_found = lock.lock().unwrap();
         *leader_found = true;
-        cvar.notify_one();
+        cvar.notify_all();
     }
 
     fn check_if_i_am_leader(&self, node_that_asked: String) -> () {
@@ -135,35 +169,42 @@ impl Node {
         else {
             println!("I am not leader");
         }
-        //println!("WHAT");
     }
 
 }
 
+// FIXME: Si se conectan 2 nodos casi al mismo tiempo, ambos se colocan como lideres porque este thread
+// bloquea al de recepcion de mensajes y no llega a recibir el mensaje de que hay un lider ni el
+// otro a recibir el mensaje de que alguien esta pidiendo por un lider
+
+//SOLUCION!!:: ABRIR UN THREAD PARA LAS RESPONSES
 fn wait_for_leader(pair: Arc<(Mutex<bool>, Condvar)>, leader_addr:Arc<RwLock<Option<String>>>)
 {
     println!("Waiting for leader");
+
+    let time = time::Instant::now();
+
     let (lock, cvar) = &*pair;
     let mut leader_found = lock.lock().unwrap();
     // as long as the value inside the `Mutex<bool>` is `false`, we wait
     loop {
+        let result = cvar.wait_timeout(leader_found, Duration::from_millis(1000)).unwrap();
         println!("searching leader");
-        let result = cvar.wait_timeout(leader_found, Duration::from_millis(5000)).unwrap();
-        // 10 milliseconds have passed, or maybe the value changed!
+        let now = time::Instant::now();
         leader_found = result.0;
+        println!("Duration: {}", now.duration_since(time).as_secs());
         if *leader_found == true {
             println!("Leader found");
             break
         }
-        else
+        else if now.duration_since(time).as_secs() >= 10
         {
-            println!("Leader not found, I become leader");
+            println!("TIMEOUT: Leader not found, I become leader");
             if let Ok(mut leader_addr_mut) = leader_addr.write()
             {
                 println!("Setting leader addr to mine");
                 *leader_addr_mut = Some("127.0.0.1:8080".to_string());
             }
-            // Set leader addr!!!!!
             break;
         }
     }
