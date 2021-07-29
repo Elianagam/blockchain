@@ -17,3 +17,7 @@ path = "src/coordinator/main.rs"
 [[bin]]
 name = "node"
 path = "src/node/main.rs"
+
+[[bin]]
+name = "app"
+path = "src/refactored_app/main.rs"
