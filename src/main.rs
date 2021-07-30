@@ -9,6 +9,8 @@ mod encoder;
 
 mod utils;
 
+mod leader_discoverer;
+
 fn port_missing() -> i32 {
     println!("Number of port must be specified");
     return -1;
