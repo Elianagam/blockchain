@@ -2,9 +2,8 @@ use std::net::{SocketAddr, UdpSocket};
 use std::sync::{Arc, Mutex, Condvar, RwLock};
 use crate::encoder::{decode_from_bytes, encode_to_bytes};
 use std::thread;
-use std::time::Duration;
-use std::time;
 use crate::blockchain::blockchain::Blockchain;
+use crate::leader_discoverer::LeaderDiscoverer;
 use crate::utils::messages::*;
 
 pub struct Node {
@@ -13,7 +12,7 @@ pub struct Node {
     pub other_nodes: Arc<Vec<String>>,
     pub leader_addr: Arc<RwLock<Option<String>>>,
     pub blockchain: Blockchain,
-    pub leader_found: bool,
+    pub leader_condvar: Arc<(Mutex<bool>, Condvar)>
 }
 
 impl Node {
@@ -34,33 +33,15 @@ impl Node {
             other_nodes: Arc::new(other_nodes),
             leader_addr: Arc::new(RwLock::new(None)),
             blockchain: Blockchain::new(),
-            leader_found: false
+            leader_condvar: Arc::new((Mutex::new(false), Condvar::new()))
         }
     }
 
     pub fn run(&mut self) -> () {
         println!("Running node on: {} ", self.socket.local_addr().unwrap().to_string());
 
-        let pair = Arc::new((Mutex::new(false), Condvar::new()));
+        self.discover_leader();
 
-        for node in &*self.other_nodes
-        {
-            self.socket.send_to(&encode_to_bytes(WHO_IS_LEADER), node).unwrap();
-        }
-
-        let leader_addr = self.leader_addr.clone();
-        let pair_clone = pair.clone();
-        let my_addres_clone =  self.my_address.clone();
-        let socket_clone= self.socket.try_clone().expect("msg");
-        let other_nodes_clone = self.other_nodes.clone();
-
-        thread::spawn(move || {
-            wait_for_leader(pair_clone, leader_addr, my_addres_clone,
-                socket_clone, other_nodes_clone);
-        });
-
-
-        // TODO: poner la logica en el thread de arriba, ir haciendo workers para los threads
         loop {
             let (msg, from)= self.read_from();
             match msg.as_str() {
@@ -77,7 +58,7 @@ impl Node {
                 }
                 I_AM_LEADER => {
                     println!("Someone said he is leader");
-                    self.leader_found(Arc::clone(&pair), from);
+                    self.leader_found(from);
                 }
                 CLOSE => {
                     break;
@@ -91,13 +72,32 @@ impl Node {
         println!("Desconectando...");
         
     }
+
+    fn discover_leader(&self) -> () {
+        for node in &*self.other_nodes
+        {
+            self.socket.send_to(&encode_to_bytes(WHO_IS_LEADER), node).unwrap();
+        }
+
+        let mut leader_discoverer = LeaderDiscoverer::new(
+            self.leader_condvar.clone(),
+            self.leader_addr.clone(),
+            self.my_address.clone(),
+            self.socket.try_clone().expect("Error cloning socket"),
+            self.other_nodes.clone()
+        );
+        
+        thread::spawn(move || {
+            leader_discoverer.run();
+        });
+    }
     
     fn i_know_the_leader(&self) -> bool {
         if let Ok(leader_addr_mut) = self.leader_addr.read() {
             return !leader_addr_mut.is_none();
         }
         else{
-            println!("not implemented");
+            println!("Leader is being changed");
             return false;
         }
     }
@@ -111,8 +111,8 @@ impl Node {
 
     fn i_am_leader(&self) -> bool {
         println!("my address: {} " , self.my_address.read().unwrap());
-        //return self.my_address == "127.0.0.1:8080";
-        if let Ok(mut leader_addr_mut) = self.leader_addr.read() {
+
+        if let Ok(leader_addr_mut) = self.leader_addr.read() {
             if *leader_addr_mut == None 
             {
                 return false;
@@ -127,9 +127,9 @@ impl Node {
         }
     }
 
-    fn leader_found(&self, pair: Arc<(Mutex<bool>, Condvar)>, leader: SocketAddr) -> () {
+    fn leader_found(&self, leader: SocketAddr) -> () {
 
-        let (lock, cvar) = &*pair;
+        let (lock, cvar) = &*self.leader_condvar;
         let mut leader_found = lock.lock().unwrap();
         *leader_found = true;
         cvar.notify_all();
@@ -150,46 +150,6 @@ impl Node {
         }        
         else {
             println!("I am not leader");
-        }
-    }
-
-}
-
-fn wait_for_leader(pair: Arc<(Mutex<bool>, Condvar)>, leader_addr:Arc<RwLock<Option<String>>>, 
-                    my_address: Arc<RwLock<String>>, socket: UdpSocket, other_nodes: Arc<Vec<String>>)
-{
-    println!("Waiting for leader");
-
-    let time = time::Instant::now();
-
-    let (lock, cvar) = &*pair;
-    let mut leader_found = lock.lock().unwrap();
-
-    loop {
-        let result = cvar.wait_timeout(leader_found, Duration::from_millis(1000)).unwrap();
-        println!("searching leader");
-        let now = time::Instant::now();
-        leader_found = result.0;
-        println!("Duration: {}", now.duration_since(time).as_secs());
-        if *leader_found == true {
-            println!("Leader found");
-            break
-        }
-        else if now.duration_since(time).as_secs() >= 10
-        {
-            println!("TIMEOUT: Leader not found, I become leader");
-            if let Ok(mut leader_addr_mut) = leader_addr.write()
-            {
-                println!("Setting leader addr to mine");
-                *leader_addr_mut = Some((*my_address.read().unwrap()).clone());
-                
-                for node in &*other_nodes
-                {
-                    socket.send_to(&encode_to_bytes(I_AM_LEADER), node).unwrap();
-                }
-                
-            }
-            break;
         }
     }
 }
