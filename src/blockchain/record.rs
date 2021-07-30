@@ -1,7 +1,6 @@
+use super::world_state::WorldState;
 use std::time::Duration;
-mod world_state;
 use blake2::{Blake2b, Digest};
-use world_state::WorldState;
 
 /// Request to the blockchain
 #[derive(Clone, Debug)]

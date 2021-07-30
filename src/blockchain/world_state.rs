@@ -1,6 +1,5 @@
-use crate::Blockchain;
-use crate::Student;
-
+use super::blockchain::Blockchain;
+use super::student::Student;
 /// The current state of the blockchain after all Blocks are executed
 /// Expected interface into the Blockchain
 pub trait WorldState {

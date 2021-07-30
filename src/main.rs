@@ -1,28 +1,13 @@
 mod node;
 
-#[path = "blockchain/blockchain.rs"]
 mod blockchain;
-use blockchain::Blockchain;
-
-#[path = "blockchain/block.rs"]
-mod block;
-use block::Block;
-
-#[path = "blockchain/student.rs"]
-mod student;
-use student::Student;
-
-#[path = "blockchain/record.rs"]
-mod record;
-use record::Record;
 
 use std::env;
 use std::process;
 
 mod encoder;
 
-#[path = "../utils/messages.rs"]
-mod messages;
+mod utils;
 
 fn port_missing() -> i32 {
     println!("Number of port must be specified");

@@ -11,13 +11,5 @@ std-semaphore = "0.1"
 blake2 = "*"
 
 [[bin]]
-name = "coordinator"
-path = "src/coordinator/main.rs"
-
-[[bin]]
-name = "node"
-path = "src/node/main.rs"
-
-[[bin]]
 name = "app"
-path = "src/refactored_app/main.rs"
+path = "src/main.rs"

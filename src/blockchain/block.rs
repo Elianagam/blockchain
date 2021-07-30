@@ -1,7 +1,7 @@
+use super::record::Record;
 extern crate blake2;
 use blake2::{Blake2b, Digest};
 
-use crate::Record;
 
 /// One single part of the blockchain that contains a list of records
 #[derive(Clone, Debug)]
