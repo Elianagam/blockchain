@@ -16,13 +16,12 @@ fn port_missing() -> i32 {
     return -1;
 }
 
-fn main() 
-{
+fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() < 2
-    {
+    if args.len() < 2 {
         process::exit(port_missing());
     }
+
     let mut node = node::Node::new(&args[1]);
     node.run();
 }

@@ -5,6 +5,21 @@ use std::thread;
 use crate::blockchain::blockchain::Blockchain;
 use crate::leader_discoverer::LeaderDiscoverer;
 use crate::utils::messages::*;
+use std::io::{self, BufRead};
+
+fn read_stdin(stdin_buffer: Arc<Mutex<Option<String>>>) {
+    println!("Write a student note:");
+    let stdin = io::stdin();
+    let mut iterator = stdin.lock().lines();
+    let line = iterator.next().unwrap().unwrap();
+
+    let student_data: Vec<&str> = line.split(",").collect();
+    if (student_data.len() == 1 && (student_data[0] == "close")) || student_data.len() == 2 {
+        *(&stdin_buffer).lock().unwrap() = Some(line);
+    } else {
+        println!("Unsupported data format, usage: id, qualification")
+    }
+}
 
 pub struct Node {
     pub my_address: Arc<RwLock<String>>,
@@ -41,16 +56,34 @@ impl Node {
         println!("Running node on: {} ", self.socket.local_addr().unwrap().to_string());
 
         self.discover_leader();
-
+        let clone_addr = self.leader_addr.clone();
+/*
+        //TODO. sacar este busy wait reemplazarlo por condvar
+        thread::spawn(move || loop {
+            let stdin_buffer = Arc::new(Mutex::new(None));
+            let tmp = stdin_buffer.clone();
+            read_stdin(stdin_buffer);
+            let value = (*tmp.lock().unwrap()).clone();
+            match value {
+                Some(stdin_msg) => {
+                    println!("Hola");
+                    if let Ok(mut leader_addr_mut) = clone_addr.write() {
+                        *leader_addr_mut = Some(stdin_msg);
+                    }
+                }
+                _ => {}
+            }
+        });
+*/
         loop {
             let (msg, from)= self.read_from();
             match msg.as_str() {
                 WHO_IS_LEADER => {
                     println!("A node is asking who the leader is");
-                    if self.i_know_the_leader() 
-                    {
+                    if self.i_know_the_leader() {
                         println!("I know the leader");
                         self.check_if_i_am_leader(from.to_string());
+                        // send blockchain
                     }
                     else{
                         println!("I don't know the leader");
@@ -74,8 +107,7 @@ impl Node {
     }
 
     fn discover_leader(&self) -> () {
-        for node in &*self.other_nodes
-        {
+        for node in &*self.other_nodes {
             self.socket.send_to(&encode_to_bytes(WHO_IS_LEADER), node).unwrap();
         }
 
@@ -113,8 +145,7 @@ impl Node {
         println!("my address: {} " , self.my_address.read().unwrap());
 
         if let Ok(leader_addr_mut) = self.leader_addr.read() {
-            if *leader_addr_mut == None 
-            {
+            if *leader_addr_mut == None {
                 return false;
             }
             println!("Leader addr: {:?}", *leader_addr_mut);
@@ -128,7 +159,6 @@ impl Node {
     }
 
     fn leader_found(&self, leader: SocketAddr) -> () {
-
         let (lock, cvar) = &*self.leader_condvar;
         let mut leader_found = lock.lock().unwrap();
         *leader_found = true;
@@ -143,8 +173,7 @@ impl Node {
 
     fn check_if_i_am_leader(&self, node_that_asked: String) -> () {
         println!("Checking if I'm leader");
-        if self.i_am_leader()
-        {
+        if self.i_am_leader() {
             print!("Sending to {} that I am leader", node_that_asked.to_string());
             self.socket.send_to(&encode_to_bytes(I_AM_LEADER), node_that_asked).unwrap();
         }        
