@@ -49,7 +49,7 @@ impl LeaderDiscoverer {
                 println!("Leader found");
                 break
             }
-            else if now.duration_since(time).as_secs() >= 10
+            else if now.duration_since(time).as_secs() >= 3
             {
                 println!("TIMEOUT: Leader not found, I become leader");
                 if let Ok(mut leader_addr_mut) = self.leader_addr.write()

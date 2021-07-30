@@ -2,6 +2,8 @@ use std::net::{SocketAddr, UdpSocket};
 use std::sync::{Arc, Mutex, Condvar, RwLock};
 use crate::encoder::{decode_from_bytes, encode_to_bytes};
 use std::thread;
+use std_semaphore::Semaphore;
+use std::time::Duration;
 use crate::blockchain::blockchain::Blockchain;
 use crate::leader_discoverer::LeaderDiscoverer;
 use crate::utils::messages::*;
@@ -12,7 +14,10 @@ pub struct Node {
     pub other_nodes: Arc<Vec<String>>,
     pub leader_addr: Arc<RwLock<Option<String>>>,
     pub blockchain: Blockchain,
-    pub leader_condvar: Arc<(Mutex<bool>, Condvar)>
+    pub leader_condvar: Arc<(Mutex<bool>, Condvar)>,
+    pub mutex: Arc<Semaphore>,
+    pub pending_acquires: Vec<String>,
+    pub node_id_with_mutex: Arc<RwLock<Option<SocketAddr>>>
 }
 
 impl Node {
@@ -33,7 +38,10 @@ impl Node {
             other_nodes: Arc::new(other_nodes),
             leader_addr: Arc::new(RwLock::new(None)),
             blockchain: Blockchain::new(),
-            leader_condvar: Arc::new((Mutex::new(false), Condvar::new()))
+            leader_condvar: Arc::new((Mutex::new(false), Condvar::new())),
+            mutex: Arc::new(Semaphore::new(1)),
+            pending_acquires: vec![],
+            node_id_with_mutex: Arc::new(RwLock::new(None))
         }
     }
 
@@ -41,6 +49,30 @@ impl Node {
         println!("Running node on: {} ", self.socket.local_addr().unwrap().to_string());
 
         self.discover_leader();
+
+        let socket_clone = self.socket.try_clone().unwrap();
+        let leader_addr_clone = self.leader_addr.clone();
+        let my_address_clone = self.my_address.clone();
+
+        thread::spawn(move || {
+            let leader_addr = (leader_addr_clone.read().unwrap()).clone();
+            while leader_addr.is_none()
+            {
+                // DO nothing
+            }
+            
+            if *my_address_clone.read().unwrap() != (*leader_addr_clone.read().unwrap()).clone().unwrap()
+            {
+                socket_clone.send_to(&encode_to_bytes(ACQUIRE_MSG), leader_addr.clone().unwrap()).unwrap();
+                println!("Sent acquire");
+
+                thread::sleep(Duration::from_secs(10));
+
+                socket_clone.send_to(&encode_to_bytes(RELEASE_MSG), leader_addr.clone().unwrap()).unwrap();
+                println!("Sent release");
+            }
+            
+        });
 
         loop {
             let (msg, from)= self.read_from();
@@ -59,6 +91,17 @@ impl Node {
                 I_AM_LEADER => {
                     println!("Someone said he is leader");
                     self.leader_found(from);
+                }
+                ACQUIRE_MSG => {
+                    if self.i_am_leader() {
+                        let node_id_with_mutex_clone = self.node_id_with_mutex.clone();
+                        self.node_attempting_to_acquire_mutex(from, self.mutex.clone(), node_id_with_mutex_clone);
+                    }
+                }
+                RELEASE_MSG => {
+                    if self.i_am_leader() {
+                        self.node_releasing_mutex(from);
+                    }
                 }
                 CLOSE => {
                     break;
@@ -110,19 +153,15 @@ impl Node {
     }
 
     fn i_am_leader(&self) -> bool {
-        println!("my address: {} " , self.my_address.read().unwrap());
-
         if let Ok(leader_addr_mut) = self.leader_addr.read() {
             if *leader_addr_mut == None 
             {
                 return false;
             }
-            println!("Leader addr: {:?}", *leader_addr_mut);
             return *self.my_address.read().unwrap() == *leader_addr_mut.clone().unwrap();
         }
         else {
-            // FIXME
-            println!("not implemented");
+            println!("Leader is being changed");
             return false;
         }
     }
@@ -145,11 +184,47 @@ impl Node {
         println!("Checking if I'm leader");
         if self.i_am_leader()
         {
-            print!("Sending to {} that I am leader", node_that_asked.to_string());
+            println!("Sending to {} that I am leader", node_that_asked.to_string());
             self.socket.send_to(&encode_to_bytes(I_AM_LEADER), node_that_asked).unwrap();
         }        
         else {
             println!("I am not leader");
         }
+    }
+
+
+    // TODO: Cambiar esto para tener un thread 
+
+
+    // Esto bloquea el thread de recepción de mensajes => deberia ir en otro thread
+    fn node_attempting_to_acquire_mutex(&mut self, node: SocketAddr, 
+                                        mutex: Arc<Semaphore>, node_id_with_mutex: Arc<RwLock<Option<SocketAddr>>>) {
+        if node.to_string() == *self.my_address.read().unwrap() {
+            return;
+        }
+        println!("Received acquire form: {}", node);
+        //self.pending_acquires.push(node.to_string());
+        println!("{} waiting for mutex to be released", node);
+        thread::spawn(move || {
+            mutex.acquire();
+            if let Ok(mut node_id) = node_id_with_mutex.write() {
+                *node_id = Some(node);
+            }
+            println!("Mutex acquired by {}", node.to_string());
+        });        
+    }
+
+    fn node_releasing_mutex(&mut self, node: SocketAddr) {
+        if node.to_string() == *self.my_address.read().unwrap() {
+            return;
+        }
+        if node != (*self.node_id_with_mutex.read().unwrap()).unwrap() {
+            return;
+        }
+        self.mutex.release();
+        if let Ok(mut node_id) = self.node_id_with_mutex.write() {
+            *node_id = None;
+        }
+        println!("{} released mutex", node.to_string());
     }
 }
