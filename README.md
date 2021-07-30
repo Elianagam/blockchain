@@ -28,13 +28,7 @@ Nuestra implementacion:
 
 Como tenemos dos compnentes hay que especificar cual queremos buildear/correr, para eso se usa
 
-**Coordinator**
-```bash
-cargo run --bin coordinator 
-```
-
 **Node**
+```bash
+cargo run --bin app 
 ```
-cargo run --bin node [leader]
-```
-
