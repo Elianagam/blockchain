@@ -39,7 +39,6 @@ impl StdinReader {
                     .send_to(&encode_to_bytes(&value), addr)
                     .unwrap();
             if &value == CLOSE { 
-                println!("Cerrar nodo...");
                 break; 
             }
         }
