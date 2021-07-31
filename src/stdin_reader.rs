@@ -16,7 +16,7 @@ impl StdinReader {
     }
 
     fn read_stdin(&self) -> String {
-        println!("\nWrite a student note:");
+        println!("Write a student note:");
         let stdin = io::stdin();
         let mut iterator = stdin.lock().lines();
         let line = iterator.next().unwrap().unwrap();

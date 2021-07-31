@@ -45,7 +45,7 @@ impl LeaderDiscoverer {
             if *leader_found == true {
                 break;
             } else if now.duration_since(time).as_secs() >= 1 {
-                println!("TIMEOUT: Leader not found, I become leader");
+                println!("TIMEOUT: Leader not found, I become leader\n");
                 if let Ok(mut leader_addr_mut) = self.leader_addr.write() {
                     *leader_addr_mut = Some((*self.my_address.read().unwrap()).clone());
 

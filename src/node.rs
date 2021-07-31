@@ -8,7 +8,7 @@ use crate::utils::messages::*;
 use crate::stdin_reader::StdinReader;
 use crate::blockchain::record::{Record, RecordData};
 use crate::blockchain::block::Block;
-use std::time::{SystemTime};
+use std::time::{Duration, SystemTime};
 
 
 pub struct Node {
@@ -70,13 +70,13 @@ impl Node {
                         let reader = StdinReader::new(clone_socket, clone_addr);
                         reader.run();
                     });
-                    // send blockchain
+                    self.send_blockchain(self.blockchain.clone(),from,self.socket.try_clone().unwrap());
                 }
                 CLOSE => {
                     let mut clone_addr = (*self.leader_addr.read().unwrap()).clone();
                     let leader_addr = format!("{}", clone_addr.get_or_insert("Error".to_string()));
                     if format!("{}", from) == leader_addr {
-                        // El leader se quiere cerrar, que hago??
+                        // Me cierro a mi mismo
                         break;
                     } else {
                         // Si no es el leader le mando el mensaje para que se cierre 
@@ -87,6 +87,7 @@ impl Node {
                     let mut clone_addr = (*self.leader_addr.read().unwrap()).clone();
                     let leader_addr = format!("{}", clone_addr.get_or_insert("Error".to_string()));
                     if format!("{}", from) == leader_addr {
+                        println!("Envio mensaje al resto de los nodos");
                         for node in &*self.other_nodes {
                             self.socket.send_to(&encode_to_bytes(msg), node).unwrap();
                         }
@@ -105,6 +106,51 @@ impl Node {
 
         println!("Desconectando...");
         
+    }
+
+    fn send_blockchain(&self, blockchain: Blockchain, from: SocketAddr, socket: UdpSocket) {
+        socket.send_to(&encode_to_bytes(BLOCKCHAIN), from).unwrap();
+        for b in blockchain.blocks {
+            let mut data_to_send = String::new();
+            match &b.records[0].record {
+                RecordData::CreateStudent(id, qualification) => {
+                    data_to_send.push_str(
+                        &(format!(
+                            "{},{},{},{}",
+                            &id,
+                            &(qualification.to_string()),
+                            &b.records[0].created_at.as_millis().to_string(),
+                            &b.records[0].from
+                        )),
+                    );
+                }
+            };
+
+            socket
+                .send_to(&encode_to_bytes(&data_to_send), from)
+                .unwrap();
+        }
+        socket.send_to(&encode_to_bytes(END), from).unwrap();
+    }
+
+    fn recv_blockchain(&self, socket: UdpSocket) -> Blockchain {
+        let mut blockchain = Blockchain::new();
+        loop {
+            let mut buf = [0; 128];
+            let (_, _) = socket.recv_from(&mut buf).unwrap();
+            let msg = decode_from_bytes(buf.to_vec());
+            if msg == END {
+                break;
+            }
+            let mut block = Block::new(blockchain.get_last_block_hash());
+            block.add_record(self.read_record(msg));
+            if let Err(err) = blockchain.append_block(block) {
+                println!("{}", err);
+            } else {
+                println!("{}", blockchain);
+            }
+        }
+        blockchain
     }
 
     fn discover_leader(&self) -> () {
@@ -168,16 +214,31 @@ impl Node {
         }
         let mut leader_addr = (*self.leader_addr.read().unwrap()).clone();
         println!("La direccion del leader es: {}", leader_addr.get_or_insert("No address".to_string()));
+        //self.blockchain = self.recv_blockchain(self.socket.try_clone().unwrap());
+        println!("{}", self.blockchain);
     }
 
     fn check_if_i_am_leader(&self, node_that_asked: String) -> () {
         if self.i_am_leader() {
-            print!("Sending to {} that I am leader", node_that_asked.to_string());
+            print!("Sending to {} that I am leader\n", node_that_asked.to_string());
             self.socket.send_to(&encode_to_bytes(I_AM_LEADER), node_that_asked).unwrap();
         }        
         else {
             println!("I am not leader");
         }
+    }
+
+    fn read_record(&self, msg: String) -> Record {
+        let student_data: Vec<&str> = msg.split(",").collect();
+        let record = Record::new(
+            student_data[3].into(),
+            RecordData::CreateStudent(
+                student_data[0].into(),
+                student_data[1].parse::<u32>().unwrap(),
+            ),
+            Duration::from_millis(student_data[2].parse::<u64>().unwrap()),
+        );
+        record
     }
 
     fn create_record(&self, msg: &str, from: SocketAddr) -> Record {
