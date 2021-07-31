@@ -6,22 +6,10 @@ use crate::blockchain::blockchain::Blockchain;
 use crate::leader_discoverer::LeaderDiscoverer;
 use crate::utils::messages::*;
 use crate::stdin_reader::StdinReader;
-use std::io::{self, BufRead};
+use crate::blockchain::record::{Record, RecordData};
+use crate::blockchain::block::Block;
+use std::time::{SystemTime};
 
-fn read_stdin() -> String {
-    println!("Write a student note:");
-    let stdin = io::stdin();
-    let mut iterator = stdin.lock().lines();
-    let line = iterator.next().unwrap().unwrap();
-
-    let student_data: Vec<&str> = line.split(",").collect();
-    if (student_data.len() == 1 && (student_data[0] == "close")) || student_data.len() == 2 {
-        return line.to_string();
-    } else {
-        println!("Unsupported data format, usage: id, qualification")
-    }
-    return String::new(); 
-}
 
 pub struct Node {
     pub my_address: Arc<RwLock<String>>,
@@ -87,8 +75,7 @@ impl Node {
                 CLOSE => {
                     let mut clone_addr = (*self.leader_addr.read().unwrap()).clone();
                     let leader_addr = format!("{}", clone_addr.get_or_insert("Error".to_string()));
-                    let from_addr = format!("{}", from);
-                    if from_addr == leader_addr {
+                    if format!("{}", from) == leader_addr {
                         // El leader se quiere cerrar, que hago??
                         break;
                     } else {
@@ -97,7 +84,21 @@ impl Node {
                     }
                 }
                 msg => {
-                    println!("Received {}", msg);
+                    let mut clone_addr = (*self.leader_addr.read().unwrap()).clone();
+                    let leader_addr = format!("{}", clone_addr.get_or_insert("Error".to_string()));
+                    if format!("{}", from) == leader_addr {
+                        for node in &*self.other_nodes {
+                            self.socket.send_to(&encode_to_bytes(msg), node).unwrap();
+                        }
+                    }
+                    let record = self.create_record(msg, self.socket.try_clone().unwrap().local_addr().unwrap());
+                    let mut block = Block::new(self.blockchain.get_last_block_hash());
+                    block.add_record(record);
+                    if let Err(err) = self.blockchain.append_block(block) {
+                        println!("{}", err);
+                    } else {
+                        println!("{}", self.blockchain);
+                    }
                 }
             }
         }
@@ -142,8 +143,6 @@ impl Node {
     }
 
     fn i_am_leader(&self) -> bool {
-        println!("my address: {} " , self.my_address.read().unwrap());
-
         if let Ok(leader_addr_mut) = self.leader_addr.read() {
             if *leader_addr_mut == None {
                 return false;
@@ -172,7 +171,6 @@ impl Node {
     }
 
     fn check_if_i_am_leader(&self, node_that_asked: String) -> () {
-        println!("Checking if I'm leader");
         if self.i_am_leader() {
             print!("Sending to {} that I am leader", node_that_asked.to_string());
             self.socket.send_to(&encode_to_bytes(I_AM_LEADER), node_that_asked).unwrap();
@@ -180,5 +178,18 @@ impl Node {
         else {
             println!("I am not leader");
         }
+    }
+
+    fn create_record(&self, msg: &str, from: SocketAddr) -> Record {
+        let student_data: Vec<&str> = msg.split(",").collect();
+        let record = Record::new(
+            from.to_string().into(),
+            RecordData::CreateStudent(
+                student_data[0].into(),
+                student_data[1].parse::<u32>().unwrap(),
+            ),
+            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(),
+        );
+        record
     }
 }
