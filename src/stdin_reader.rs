@@ -16,7 +16,7 @@ impl StdinReader {
     }
 
     fn read_stdin(&self) -> String {
-        println!("Write a student note:");
+        println!("\nWrite a student note:");
         let stdin = io::stdin();
         let mut iterator = stdin.lock().lines();
         let line = iterator.next().unwrap().unwrap();
@@ -38,7 +38,10 @@ impl StdinReader {
             self.socket
                     .send_to(&encode_to_bytes(&value), addr)
                     .unwrap();
-            if &value == CLOSE { break; }
+            if &value == CLOSE { 
+                println!("Cerrar nodo...");
+                break; 
+            }
         }
     }
 }

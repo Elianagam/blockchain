@@ -65,8 +65,9 @@ impl Node {
                     if self.i_know_the_leader() {
                         self.check_if_i_am_leader(from.to_string());
                     }
-                    let clone_addr = (*self.leader_addr.read().unwrap()).clone();
                     let clone_socket = self.socket.try_clone().unwrap();
+                    let clone_addr = (*self.leader_addr.read().unwrap()).clone();
+
                     thread::spawn(move || {
                         let reader = StdinReader::new(clone_socket, clone_addr);
                         reader.run();
@@ -74,8 +75,9 @@ impl Node {
                 }
                 I_AM_LEADER => {
                     self.leader_found(from);
-                    let clone_addr = (*self.leader_addr.read().unwrap()).clone();
                     let clone_socket = self.socket.try_clone().unwrap();
+                    let clone_addr = (*self.leader_addr.read().unwrap()).clone();
+
                     thread::spawn(move || {
                         let reader = StdinReader::new(clone_socket, clone_addr);
                         reader.run();
@@ -83,10 +85,22 @@ impl Node {
                     // send blockchain
                 }
                 CLOSE => {
-                    break;
+                    let mut clone_addr = (*self.leader_addr.read().unwrap()).clone();
+                    let leader_addr = format!("{}", clone_addr.get_or_insert("Error".to_string()));
+                    let from_addr = format!("{}", from);
+                    println!("From: {} - Leader: {} - BOOL: {}", from_addr, leader_addr, from_addr.eq(&from_addr));
+                    if !from_addr.eq(&from_addr) {
+                        // El leader se quiere cerrar, que hago??
+                        println!("no hacer nada: {}-{}", from_addr, leader_addr);
+                    } else {
+                        // Si no es el leader le mando el mensaje para que se cierre
+                        self.socket.send_to(&encode_to_bytes(&msg), from).unwrap();
+                        println!("cerrar: {}-{}", from_addr, leader_addr);
+                        break;
+                    }
                 }
                 msg => {
-                    println!("\nReceived {}", msg);
+                    println!("Received {}", msg);
                 }
             }
         }
