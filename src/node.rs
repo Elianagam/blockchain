@@ -133,7 +133,7 @@ impl Node {
         socket.send_to(&encode_to_bytes(END), from).unwrap();
     }
 
-    fn recv_blockchain(&self, socket: UdpSocket) -> Blockchain {
+    fn recv_blockchain(&self, socket: UdpSocket) {
         let mut blockchain = Blockchain::new();
         loop {
             let mut buf = [0; 128];
@@ -150,7 +150,7 @@ impl Node {
                 println!("{}", blockchain);
             }
         }
-        blockchain
+        //(self.blockchain.lock().unwrap()) = blockchain;
     }
 
     fn discover_leader(&self) -> () {
@@ -214,7 +214,7 @@ impl Node {
         }
         let mut leader_addr = (*self.leader_addr.read().unwrap()).clone();
         println!("La direccion del leader es: {}", leader_addr.get_or_insert("No address".to_string()));
-        //self.blockchain = self.recv_blockchain(self.socket.try_clone().unwrap());
+        self.recv_blockchain(self.socket.try_clone().unwrap());
         println!("{}", self.blockchain);
     }
 
