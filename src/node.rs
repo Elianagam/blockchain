@@ -5,9 +5,10 @@ use std::thread;
 use crate::blockchain::blockchain::Blockchain;
 use crate::leader_discoverer::LeaderDiscoverer;
 use crate::utils::messages::*;
+use crate::stdin_reader::StdinReader;
 use std::io::{self, BufRead};
 
-fn read_stdin(stdin_buffer: Arc<Mutex<Option<String>>>) {
+fn read_stdin() -> String {
     println!("Write a student note:");
     let stdin = io::stdin();
     let mut iterator = stdin.lock().lines();
@@ -15,10 +16,11 @@ fn read_stdin(stdin_buffer: Arc<Mutex<Option<String>>>) {
 
     let student_data: Vec<&str> = line.split(",").collect();
     if (student_data.len() == 1 && (student_data[0] == "close")) || student_data.len() == 2 {
-        *(&stdin_buffer).lock().unwrap() = Some(line);
+        return line.to_string();
     } else {
         println!("Unsupported data format, usage: id, qualification")
     }
+    return String::new(); 
 }
 
 pub struct Node {
@@ -53,51 +55,38 @@ impl Node {
     }
 
     pub fn run(&mut self) -> () {
-        println!("Running node on: {} ", self.socket.local_addr().unwrap().to_string());
-
         self.discover_leader();
-        let clone_addr = self.leader_addr.clone();
-/*
-        //TODO. sacar este busy wait reemplazarlo por condvar
-        thread::spawn(move || loop {
-            let stdin_buffer = Arc::new(Mutex::new(None));
-            let tmp = stdin_buffer.clone();
-            read_stdin(stdin_buffer);
-            let value = (*tmp.lock().unwrap()).clone();
-            match value {
-                Some(stdin_msg) => {
-                    println!("Hola");
-                    if let Ok(mut leader_addr_mut) = clone_addr.write() {
-                        *leader_addr_mut = Some(stdin_msg);
-                    }
-                }
-                _ => {}
-            }
-        });
-*/
+
         loop {
             let (msg, from)= self.read_from();
             match msg.as_str() {
                 WHO_IS_LEADER => {
                     println!("A node is asking who the leader is");
                     if self.i_know_the_leader() {
-                        println!("I know the leader");
                         self.check_if_i_am_leader(from.to_string());
-                        // send blockchain
                     }
-                    else{
-                        println!("I don't know the leader");
-                    }
+                    let clone_addr = (*self.leader_addr.read().unwrap()).clone();
+                    let clone_socket = self.socket.try_clone().unwrap();
+                    thread::spawn(move || {
+                        let reader = StdinReader::new(clone_socket, clone_addr);
+                        reader.run();
+                    });
                 }
                 I_AM_LEADER => {
-                    println!("Someone said he is leader");
                     self.leader_found(from);
+                    let clone_addr = (*self.leader_addr.read().unwrap()).clone();
+                    let clone_socket = self.socket.try_clone().unwrap();
+                    thread::spawn(move || {
+                        let reader = StdinReader::new(clone_socket, clone_addr);
+                        reader.run();
+                    });
+                    // send blockchain
                 }
                 CLOSE => {
                     break;
                 }
                 msg => {
-                    println!("Received {}", msg);
+                    println!("\nReceived {}", msg);
                 }
             }
         }
