@@ -63,7 +63,11 @@ fn run_bully_algorithm(my_address: String, mut socket: SocketWithTimeout, electi
 
     if (*result.0).is_none() {
         println!("Proclaming myself as the new leader");
-        for n_addr in build_addr_list(&my_address) {
+        let mut addr_list = build_addr_list(&my_address);
+        // FIXME. deberiamos setearnos internamente nuestra direccion
+        addr_list.push(my_address);
+
+        for n_addr in addr_list {
             socket.send_to(COORDINATOR.to_string(), n_addr).unwrap();
         }
 
@@ -130,7 +134,7 @@ impl Node {
                         println!("I don't know the leader");
                     }
                 }
-                I_AM_LEADER => {
+                COORDINATOR => {
                     println!("Someone said he is leader");
                     self.leader_found(from);
                 }
@@ -230,7 +234,7 @@ impl Node {
                 node_that_asked.to_string()
             );
             self.socket
-                .send_to(I_AM_LEADER.to_string(), node_that_asked)
+                .send_to(COORDINATOR.to_string(), node_that_asked)
                 .unwrap();
         } else {
             println!("I am not leader");

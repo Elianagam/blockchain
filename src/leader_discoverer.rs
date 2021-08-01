@@ -1,7 +1,5 @@
-use crate::encoder::encode_to_bytes;
 use crate::utils::messages::*;
 use crate::utils::socket_with_timeout::SocketWithTimeout;
-use std::net::UdpSocket;
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time;
 use std::time::Duration;
@@ -58,7 +56,7 @@ impl LeaderDiscoverer {
 
                     for node in &*self.other_nodes {
                         self.socket
-                            .send_to(I_AM_LEADER.to_string(), node.clone())
+                            .send_to(COORDINATOR.to_string(), node.clone())
                             .unwrap();
                     }
                 }
