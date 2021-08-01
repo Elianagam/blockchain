@@ -1,11 +1,12 @@
 use crate::blockchain::blockchain::Blockchain;
-use crate::encoder::{decode_from_bytes, encode_to_bytes};
 use crate::leader_discoverer::LeaderDiscoverer;
 use crate::utils::socket_with_timeout::SocketWithTimeout;
 use crate::utils::messages::*;
+
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread;
+use std::time::Duration;
 
 const MAX_NODES: u32 = 50;
 
@@ -16,6 +17,7 @@ pub struct Node {
     pub leader_addr: Arc<RwLock<Option<String>>>,
     pub blockchain: Blockchain,
     pub leader_condvar: Arc<(Mutex<bool>, Condvar)>,
+    pub election_condvar: Arc<(Mutex<Option<String>>, Condvar)>
 }
 
 fn build_addr_list(skip_addr: &String) -> Vec<String> {
@@ -31,6 +33,41 @@ fn build_addr_list(skip_addr: &String) -> Vec<String> {
 
 fn get_port_from_addr(addr: String) -> u32 {
     addr.split(":").collect::<Vec<&str>>()[1].parse::<u32>().unwrap()
+}
+
+fn find_upper_sockets(my_address: &String) -> Vec<String> {
+    let mut upper_nodes = vec!();
+
+    for n_addr in build_addr_list(&my_address) {
+        if get_port_from_addr(my_address.clone()) < get_port_from_addr(n_addr.clone()) {
+            upper_nodes.push(n_addr);
+        }
+    }
+    upper_nodes
+}
+
+fn run_bully_algorithm(my_address: String, mut socket: SocketWithTimeout, election_condvar: Arc<(Mutex<Option<String>>, Condvar)>) {
+    //TODO: esto deberia correr sobre un thread aparte
+    println!("[NODE] Running bully algorithm.");
+
+    for node in find_upper_sockets(&my_address) {
+        socket.send_to(ELECTION.to_string(), node).unwrap();
+    }
+    // Seteamos un timer para esperar alguna respuesta por lo menos
+    let (lock, cvar) = &*election_condvar;
+
+    let guard = lock.lock().unwrap();
+    let timeout = Duration::from_secs(1);
+
+    let result = cvar.wait_timeout(guard, timeout).unwrap();
+
+    if (*result.0).is_none() {
+        println!("Proclaming myself as the new leader");
+        for n_addr in build_addr_list(&my_address) {
+            socket.send_to(COORDINATOR.to_string(), n_addr).unwrap();
+        }
+
+    }
 }
 
 impl Node {
@@ -55,6 +92,7 @@ impl Node {
             leader_addr: Arc::new(RwLock::new(None)),
             blockchain: Blockchain::new(),
             leader_condvar: Arc::new((Mutex::new(false), Condvar::new())),
+            election_condvar: Arc::new((Mutex::new(None), Condvar::new())),
             other_nodes,
         }
     }
@@ -66,6 +104,19 @@ impl Node {
         );
 
         self.discover_leader();
+
+        let me = self.my_address.read().unwrap().clone();
+        let socket = self.socket.try_clone();
+        let cv = self.election_condvar.clone();
+
+        std::thread::spawn(move || {
+            if get_port_from_addr(me.clone()) == 8001 {
+                println!("Running bully algorithm in 5 secs.");
+                std::thread::sleep(Duration::from_secs(5));
+                run_bully_algorithm(me, socket, cv);
+            }
+        });
+
 
         loop {
             let (_, from, msg) = self.socket.recv_from();
@@ -86,6 +137,22 @@ impl Node {
                 CLOSE => {
                     break;
                 }
+                OK => {
+                    // Basicamente cada vez que recibamos un mensaje le hacemos un notify
+                    // a la otra convar y seteamos la IP del que recibimos.
+                    let (lock, cvar) = &*self.election_condvar;
+                    *lock.lock().unwrap() = Some(from.to_string());
+                    cvar.notify_all();
+                }
+                ELECTION => {
+                    let me = self.my_address.read().unwrap().clone();
+                    let mut socket = self.socket.try_clone();
+                    let cv = self.election_condvar.clone();
+                    std::thread::spawn(move || {
+                        socket.send_to(OK.to_string(), from.to_string()).unwrap();
+                        run_bully_algorithm(me, socket, cv);
+                    });
+                }
                 msg => {
                     println!("Received {}", msg);
                 }
@@ -95,31 +162,10 @@ impl Node {
         println!("Desconectando...");
     }
 
-    fn find_upper_sockets(&mut self) -> Vec<String> {
-        let me = self.my_address.read().unwrap().clone();
-
-        let mut upper_nodes = vec!();
-
-        for n_addr in build_addr_list(&me) {
-            if get_port_from_addr(me.clone()) < get_port_from_addr(n_addr.clone()) {
-                upper_nodes.push(n_addr);
-            }
-        }
-        upper_nodes
-    }
-
-    fn run_bully_algorithm(&mut self) {
-        println!("[NODE] Running bully algorithm.");
-
-        for node in self.find_upper_sockets() {
-            self.socket.send_to(ELECTION.to_string(), node);
-        }
-    }
-
     fn discover_leader(&mut self) -> () {
         for node in &*self.other_nodes {
             self.socket 
-                .send_to(WHO_IS_LEADER.to_string(), node.clone());
+                .send_to(WHO_IS_LEADER.to_string(), node.clone()).unwrap();
         }
 
         let mut leader_discoverer = LeaderDiscoverer::new(
