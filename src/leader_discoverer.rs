@@ -53,7 +53,6 @@ impl LeaderDiscoverer {
             let result = cvar
                 .wait_timeout(leader_found, Duration::from_millis(1000))
                 .unwrap();
-            println!("searching leader");
             let now = time::Instant::now();
             leader_found = result.0;
             if *leader_found == true {

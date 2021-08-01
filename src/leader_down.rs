@@ -37,6 +37,8 @@ impl LeaderDown {
         let time = time::Instant::now();
         let (lock, cvar) = &*self.condvar;
         let mut leader_down = lock.lock().unwrap();
+        let mut leader_addr = (self.leader_addr.read().unwrap()).clone();
+        let addr = format!("{}", leader_addr.get_or_insert("No address".to_string()));
 
         loop {
             let result = cvar
@@ -51,9 +53,11 @@ impl LeaderDown {
                 println!("TIMEOUT: Leader is down");
                 
                 for node in &*self.other_nodes {
-                    self.socket
-                        .send_to(&encode_to_bytes(LEADER_IS_DOWN), node)
-                        .unwrap();
+                    if node != &addr {
+                        self.socket
+                            .send_to(&encode_to_bytes(LEADER_IS_DOWN), node)
+                            .unwrap();
+                    }
                 }
                 
                 *leader_down = true;
