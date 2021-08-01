@@ -22,7 +22,14 @@ pub struct Node {
     pub blockchain: Blockchain,
     pub leader_condvar: Arc<(Mutex<bool>, Condvar)>,
     pub election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
+
+    // El nodo esta vivo (no se hizo `close`)
     pub alive: Arc<RwLock<bool>>,
+
+    // Convar para detectar mensajes ack
+    pub msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,
+
+    pub leader_down: Arc<(Mutex<bool>, Condvar)>,
 }
 
 fn build_addr_list(skip_addr: &String) -> Vec<String> {
@@ -65,23 +72,45 @@ fn run_bully_algorithm(
     }
     let (lock, cvar) = &*election_condvar;
 
-    let guard = lock.lock().unwrap();
+    let mut guard = lock.lock().unwrap();
     let timeout = Duration::from_secs(ELECTION_TIMEOUT_SECS);
 
     let result = cvar.wait_timeout(guard, timeout).unwrap();
 
-    if (*result.0).is_none() {
+    guard = result.0;
+
+    if (*guard).is_none() {
         let mut addr_list = build_addr_list(&my_address);
         // FIXME. Agregamos nuestra direccion a la lista
         // para poder setearnos en nuestro estado interno
         // que somos el coordinador.
         addr_list.push(my_address);
 
+        println!("Proclamandome como lider!");
         for n_addr in addr_list {
             socket.send_to(COORDINATOR.to_string(), n_addr).unwrap();
         }
     }
 }
+
+fn leader_down_handler(
+    leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
+    my_address: String,
+    socket: SocketWithTimeout,
+    election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
+) {
+    let (lock, cv) = &*leader_down_cv;
+
+    let mut leader_down = lock.lock().unwrap();
+
+    // *guard: el lider murio 
+    while !*leader_down {
+        leader_down = cv.wait(leader_down).unwrap();
+    }
+
+    run_bully_algorithm(my_address, socket, election_condvar);
+}
+
 
 impl Node {
     pub fn new(port_number: &str) -> Self {
@@ -107,11 +136,21 @@ impl Node {
             election_condvar: Arc::new((Mutex::new(None), Condvar::new())),
             other_nodes,
             alive: Arc::new(RwLock::new(true)),
+            msg_ack_cv: Arc::new((Mutex::new(false), Condvar::new())),
+            leader_down: Arc::new((Mutex::new(false), Condvar::new())),
         }
     }
 
     pub fn run(&mut self) -> () {
         println!("Running node on: {} ", self.socket.local_addr().to_string());
+
+        // Run bully handle in another thread.
+        let me = self.my_address.read().unwrap().clone();
+        let socket = self.socket.try_clone();
+        let cv = self.election_condvar.clone();
+        let leader_down_cv_clone = self.leader_down.clone();
+
+        thread::spawn(move || leader_down_handler(leader_down_cv_clone, me, socket, cv));
 
         self.discover_leader();
 
@@ -120,20 +159,24 @@ impl Node {
         let alive_clone = self.alive.clone();
 
         let cv_clone = self.leader_condvar.clone();
+        let msg_ack_cv_clone = self.msg_ack_cv.clone();
+        let leader_down_cv_clone = self.leader_down.clone();
 
         thread::spawn(move || {
             let (lock, cv) = &*cv_clone;
 
-            let mut leader_found = lock.lock().unwrap();
+            {
+                let mut leader_found = lock.lock().unwrap();
 
-            while !*leader_found {
-                leader_found = cv.wait(leader_found).unwrap();
+                while !*leader_found {
+                    leader_found = cv.wait(leader_found).unwrap();
+                }
             }
 
             let leader_addr = (leader_addr_clone.read().unwrap()).clone();
 
             println!("Leader found: {:?} ", leader_addr);
-            let mut reader = StdinReader::new(clone_socket, leader_addr, alive_clone);
+            let mut reader = StdinReader::new(clone_socket, leader_addr, alive_clone, msg_ack_cv_clone, leader_down_cv_clone);
             reader.run();
         });
 
@@ -160,13 +203,16 @@ impl Node {
                     cvar.notify_all();
                 }
                 ELECTION => {
-                    let me = self.my_address.read().unwrap().clone();
-                    let mut socket = self.socket.try_clone();
-                    let cv = self.election_condvar.clone();
-                    std::thread::spawn(move || {
-                        socket.send_to(OK.to_string(), from.to_string()).unwrap();
-                        run_bully_algorithm(me, socket, cv);
-                    });
+                    self.socket.send_to(OK.to_string(), from.to_string()).unwrap();
+
+                    let (lock, cvar) = &*self.leader_down;
+                    *lock.lock().unwrap() = true;
+                    cvar.notify_all();
+                }
+                ACK_MSG => {
+                    let (lock, cv) = &*self.msg_ack_cv;
+                    *lock.lock().unwrap() = true;
+                    cv.notify_all();
                 }
                 msg => {
                     let record = self.create_record(msg, from);
@@ -176,6 +222,7 @@ impl Node {
                         println!("Error: {}", err);
                     }
                     if self.i_am_leader() {
+                        self.socket.send_to(ACK_MSG.to_string(), from.to_string()).unwrap();
                         // Si el mensaje viene del leader, lo propago a todos
                         for node in &*self.other_nodes {
                             self.socket.send_to(msg.to_string(), node.clone()).unwrap();
