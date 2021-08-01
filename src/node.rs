@@ -121,7 +121,7 @@ impl Node {
                     if let Err(err) = self.blockchain.append_block(block) {
                         println!("Error: {}", err);
                     } 
-                    if format!("{}", tmp.from) == leader_addr {
+                    if self.i_am_leader() {
                         // Si el mensaje viene del leader, lo propago a todos
                         println!("IF - RECV: {} - FROM LEADER?: {} - {}", msg, tmp.from, leader_addr);
                         for node in &*self.other_nodes {
