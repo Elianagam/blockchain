@@ -29,6 +29,9 @@ Nuestra implementacion:
 Como tenemos dos compnentes hay que especificar cual queremos buildear/correr, para eso se usa
 
 **Node**
+
 ```bash
-cargo run --bin app 
+cargo run --bin app <puerto> 
 ```
+
+<puerto>: puerto al que se bindea el nodo, tiene que estar en el rango de 8000 a 8050
