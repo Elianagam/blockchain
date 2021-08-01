@@ -6,9 +6,8 @@ use std::env;
 use std::process;
 
 mod encoder;
-
 mod utils;
-
+mod stdin_reader;
 mod leader_discoverer;
 
 fn port_missing() -> i32 {
@@ -21,6 +20,7 @@ fn main() {
     if args.len() < 2 {
         process::exit(port_missing());
     }
+
     let mut node = node::Node::new(&args[1]);
     node.run();
 }
