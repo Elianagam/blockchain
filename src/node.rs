@@ -94,13 +94,10 @@ impl Node {
                     let mut clone_addr = (*self.leader_addr.read().unwrap()).clone();
                     let leader_addr = format!("{}", clone_addr.get_or_insert("Error".to_string()));
                     if format!("{}", from) == leader_addr {
-                        println!("Received from leader {}", msg);
                         for node in &*self.other_nodes {
                             self.socket.send_to(&encode_to_bytes(msg), node).unwrap();
                         }
-                    } else {
-                        println!("Received I am the leader {}", msg);
-                    }
+                    } 
                     let record = self.create_record(msg, from);
                     let mut block = Block::new(self.blockchain.get_last_block_hash());
                     block.add_record(record);
