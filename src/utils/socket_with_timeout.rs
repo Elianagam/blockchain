@@ -1,5 +1,4 @@
 use std::net::{SocketAddr, UdpSocket};
-use std::thread;
 
 use crate::encoder::{encode_to_bytes, decode_from_bytes};
 

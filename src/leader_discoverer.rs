@@ -4,6 +4,8 @@ use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time;
 use std::time::Duration;
 
+const LEADER_DISCOVER_TIMEOUT_SECS: u64 = 2;
+
 pub struct LeaderDiscoverer {
     pub condvar: Arc<(Mutex<bool>, Condvar)>,
     pub leader_addr: Arc<RwLock<Option<String>>>,
@@ -29,9 +31,18 @@ impl LeaderDiscoverer {
         }
     }
 
+    // Este algoritmo es el primero que corre cada nodo
+    // para tratar de encontrar a otro lider
+    // envia mensajes para tratar de encontrar a otro lider
+    // si falla (timeout) entonces se setea a si mismo.
     pub fn run(&mut self) -> () {
-        println!("Waiting for leader");
+        for node in &*self.other_nodes {
+            self.socket
+                .send_to(WHO_IS_LEADER.to_string(), node.clone())
+                .unwrap();
+        }
 
+        println!("Waiting for leader");
         let time = time::Instant::now();
 
         let (lock, cvar) = &*self.condvar;
@@ -44,11 +55,10 @@ impl LeaderDiscoverer {
             println!("searching leader");
             let now = time::Instant::now();
             leader_found = result.0;
-            println!("Duration: {}", now.duration_since(time).as_secs());
             if *leader_found == true {
                 println!("Leader found");
                 break;
-            } else if now.duration_since(time).as_secs() >= 10 {
+            } else if now.duration_since(time).as_secs() >= LEADER_DISCOVER_TIMEOUT_SECS {
                 println!("TIMEOUT: Leader not found, I become leader");
                 if let Ok(mut leader_addr_mut) = self.leader_addr.write() {
                     println!("Setting leader addr to mine");
@@ -60,6 +70,8 @@ impl LeaderDiscoverer {
                             .unwrap();
                     }
                 }
+                *leader_found = true;
+                cvar.notify_all();
                 break;
             }
         }
