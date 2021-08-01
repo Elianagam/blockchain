@@ -60,6 +60,8 @@ impl Node {
                         let reader = StdinReader::new(clone_socket, clone_addr);
                         reader.run();
                     });
+                    println!("Soy el leader, enviar blockchain...");
+                    self.send_blockchain(from);
                 }
                 I_AM_LEADER => {
                     self.leader_found(from);
@@ -70,8 +72,6 @@ impl Node {
                         let reader = StdinReader::new(clone_socket, clone_addr);
                         reader.run();
                     });
-                    println!("Soy el leader, enviar blockchain...");
-                    self.send_blockchain(from);
                 }
                 CLOSE => {
                     let mut clone_addr = (*self.leader_addr.read().unwrap()).clone();
@@ -93,14 +93,13 @@ impl Node {
                 msg => {
                     let mut clone_addr = (*self.leader_addr.read().unwrap()).clone();
                     let leader_addr = format!("{}", clone_addr.get_or_insert("Error".to_string()));
-                    
                     if format!("{}", from) == leader_addr {
-                        println!("Received I am the leader {}", msg);
+                        println!("Received from leader {}", msg);
                         for node in &*self.other_nodes {
                             self.socket.send_to(&encode_to_bytes(msg), node).unwrap();
                         }
                     } else {
-                        println!("Received from leader {}", msg);
+                        println!("Received I am the leader {}", msg);
                     }
                     let record = self.create_record(msg, from);
                     let mut block = Block::new(self.blockchain.get_last_block_hash());
