@@ -1,6 +1,6 @@
 use super::block::Block;
-use super::student::Student;
 use super::record::Record;
+use super::student::Student;
 use std::collections::HashMap;
 use std::convert::Into;
 use std::fmt;

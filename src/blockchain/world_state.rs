@@ -30,15 +30,12 @@ impl WorldState for Blockchain {
     }
 
     fn create_student(&mut self, id: String, qualification: u32) -> Result<(), &'static str> {
-        if qualification >= 1 && qualification <= 10
-        {
+        if qualification >= 1 && qualification <= 10 {
             let acc = Student::new(qualification);
             self.students.insert(id, acc);
-            return Ok(())
-        }
-        else {
+            return Ok(());
+        } else {
             return Err("Qualification must be between 1 and 10");
         }
-        
     }
 }
