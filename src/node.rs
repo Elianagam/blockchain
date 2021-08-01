@@ -9,6 +9,7 @@ use std::thread;
 use std::time::Duration;
 
 const MAX_NODES: u32 = 50;
+const ELECTION_TIMEOUT_SECS: u64 = 1;
 
 pub struct Node {
     pub my_address: Arc<RwLock<String>>,
@@ -47,24 +48,23 @@ fn find_upper_sockets(my_address: &String) -> Vec<String> {
 }
 
 fn run_bully_algorithm(my_address: String, mut socket: SocketWithTimeout, election_condvar: Arc<(Mutex<Option<String>>, Condvar)>) {
-    //TODO: esto deberia correr sobre un thread aparte
-    println!("[NODE] Running bully algorithm.");
+    println!("Running bully algorithm.");
 
     for node in find_upper_sockets(&my_address) {
         socket.send_to(ELECTION.to_string(), node).unwrap();
     }
-    // Seteamos un timer para esperar alguna respuesta por lo menos
     let (lock, cvar) = &*election_condvar;
 
     let guard = lock.lock().unwrap();
-    let timeout = Duration::from_secs(1);
+    let timeout = Duration::from_secs(ELECTION_TIMEOUT_SECS);
 
     let result = cvar.wait_timeout(guard, timeout).unwrap();
 
     if (*result.0).is_none() {
-        println!("Proclaming myself as the new leader");
         let mut addr_list = build_addr_list(&my_address);
-        // FIXME. deberiamos setearnos internamente nuestra direccion
+        // FIXME. Agregamos nuestra direccion a la lista 
+        // para poder setearnos en nuestro estado interno
+        // que somos el coordinador.
         addr_list.push(my_address);
 
         for n_addr in addr_list {
@@ -113,9 +113,10 @@ impl Node {
         let socket = self.socket.try_clone();
         let cv = self.election_condvar.clone();
 
+        // TODO: codigo para probar algoritmo de bully. Sacarlo una vez 
+        // que este mergeado lo de stdin.
         std::thread::spawn(move || {
             if get_port_from_addr(me.clone()) == 8001 {
-                println!("Running bully algorithm in 5 secs.");
                 std::thread::sleep(Duration::from_secs(5));
                 run_bully_algorithm(me, socket, cv);
             }
@@ -135,7 +136,6 @@ impl Node {
                     }
                 }
                 COORDINATOR => {
-                    println!("Someone said he is leader");
                     self.leader_found(from);
                 }
                 CLOSE => {
