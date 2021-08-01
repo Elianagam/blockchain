@@ -1,5 +1,6 @@
 use crate::encoder::encode_to_bytes;
 use crate::utils::messages::*;
+use crate::utils::socket_with_timeout::SocketWithTimeout;
 use std::net::UdpSocket;
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time;
@@ -9,7 +10,7 @@ pub struct LeaderDiscoverer {
     pub condvar: Arc<(Mutex<bool>, Condvar)>,
     pub leader_addr: Arc<RwLock<Option<String>>>,
     pub my_address: Arc<RwLock<String>>,
-    pub socket: UdpSocket,
+    pub socket: SocketWithTimeout,
     pub other_nodes: Arc<Vec<String>>,
 }
 
@@ -18,7 +19,7 @@ impl LeaderDiscoverer {
         condvar: Arc<(Mutex<bool>, Condvar)>,
         leader_addr: Arc<RwLock<Option<String>>>,
         my_address: Arc<RwLock<String>>,
-        socket: UdpSocket,
+        socket: SocketWithTimeout,
         other_nodes: Arc<Vec<String>>,
     ) -> Self {
         LeaderDiscoverer {
@@ -57,7 +58,7 @@ impl LeaderDiscoverer {
 
                     for node in &*self.other_nodes {
                         self.socket
-                            .send_to(&encode_to_bytes(I_AM_LEADER), node)
+                            .send_to(I_AM_LEADER.to_string(), node.clone())
                             .unwrap();
                     }
                 }

@@ -1,6 +1,7 @@
 use crate::blockchain::blockchain::Blockchain;
 use crate::encoder::{decode_from_bytes, encode_to_bytes};
 use crate::leader_discoverer::LeaderDiscoverer;
+use crate::utils::socket_with_timeout::SocketWithTimeout;
 use crate::utils::messages::*;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
@@ -10,7 +11,7 @@ const MAX_NODES: u32 = 50;
 
 pub struct Node {
     pub my_address: Arc<RwLock<String>>,
-    pub socket: UdpSocket,
+    pub socket: SocketWithTimeout,
     pub other_nodes: Arc<Vec<String>>,
     pub leader_addr: Arc<RwLock<Option<String>>>,
     pub blockchain: Blockchain,
@@ -28,6 +29,10 @@ fn build_addr_list(skip_addr: &String) -> Vec<String> {
     addrs
 }
 
+fn get_port_from_addr(addr: String) -> u32 {
+    addr.split(":").collect::<Vec<&str>>()[1].parse::<u32>().unwrap()
+}
+
 impl Node {
     pub fn new(port_number: &str) -> Self {
         let port_number = port_number.parse::<u32>().unwrap();
@@ -42,10 +47,11 @@ impl Node {
         let my_address: String = format!("127.0.0.1:{}", port_number);
 
         let other_nodes = Arc::new(build_addr_list(&my_address));
+        let socket = UdpSocket::bind(my_address.clone()).unwrap();
 
         Node {
             my_address: Arc::new(RwLock::new(my_address.clone())),
-            socket: UdpSocket::bind(my_address.clone()).unwrap(),
+            socket: SocketWithTimeout::new(socket),
             leader_addr: Arc::new(RwLock::new(None)),
             blockchain: Blockchain::new(),
             leader_condvar: Arc::new((Mutex::new(false), Condvar::new())),
@@ -56,13 +62,13 @@ impl Node {
     pub fn run(&mut self) -> () {
         println!(
             "Running node on: {} ",
-            self.socket.local_addr().unwrap().to_string()
+            self.socket.local_addr().to_string()
         );
 
         self.discover_leader();
 
         loop {
-            let (msg, from) = self.read_from();
+            let (_, from, msg) = self.socket.recv_from();
             match msg.as_str() {
                 WHO_IS_LEADER => {
                     println!("A node is asking who the leader is");
@@ -89,18 +95,38 @@ impl Node {
         println!("Desconectando...");
     }
 
-    fn discover_leader(&self) -> () {
+    fn find_upper_sockets(&mut self) -> Vec<String> {
+        let me = self.my_address.read().unwrap().clone();
+
+        let mut upper_nodes = vec!();
+
+        for n_addr in build_addr_list(&me) {
+            if get_port_from_addr(me.clone()) < get_port_from_addr(n_addr.clone()) {
+                upper_nodes.push(n_addr);
+            }
+        }
+        upper_nodes
+    }
+
+    fn run_bully_algorithm(&mut self) {
+        println!("[NODE] Running bully algorithm.");
+
+        for node in self.find_upper_sockets() {
+            self.socket.send_to(ELECTION.to_string(), node);
+        }
+    }
+
+    fn discover_leader(&mut self) -> () {
         for node in &*self.other_nodes {
-            self.socket
-                .send_to(&encode_to_bytes(WHO_IS_LEADER), node)
-                .unwrap();
+            self.socket 
+                .send_to(WHO_IS_LEADER.to_string(), node.clone());
         }
 
         let mut leader_discoverer = LeaderDiscoverer::new(
             self.leader_condvar.clone(),
             self.leader_addr.clone(),
             self.my_address.clone(),
-            self.socket.try_clone().expect("Error cloning socket"),
+            self.socket.try_clone(),
             self.other_nodes.clone(),
         );
 
@@ -116,13 +142,6 @@ impl Node {
             println!("Leader is being changed");
             return false;
         }
-    }
-
-    fn read_from(&self) -> (String, SocketAddr) {
-        let mut buf = [0; 128];
-        let (_, from) = self.socket.recv_from(&mut buf).unwrap();
-        let msg = decode_from_bytes(buf.to_vec());
-        (msg, from)
     }
 
     fn i_am_leader(&self) -> bool {
@@ -157,7 +176,7 @@ impl Node {
         );
     }
 
-    fn check_if_i_am_leader(&self, node_that_asked: String) -> () {
+    fn check_if_i_am_leader(&mut self, node_that_asked: String) -> () {
         println!("Checking if I'm leader");
         if self.i_am_leader() {
             print!(
@@ -165,7 +184,7 @@ impl Node {
                 node_that_asked.to_string()
             );
             self.socket
-                .send_to(&encode_to_bytes(I_AM_LEADER), node_that_asked)
+                .send_to(I_AM_LEADER.to_string(), node_that_asked)
                 .unwrap();
         } else {
             println!("I am not leader");
