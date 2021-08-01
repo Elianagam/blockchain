@@ -1,6 +1,7 @@
 use crate::blockchain::blockchain::Blockchain;
 use crate::encoder::{decode_from_bytes, encode_to_bytes};
 use crate::leader_discoverer::LeaderDiscoverer;
+use crate::leader_down::LeaderDown;
 use crate::utils::messages::*;
 use crate::blockchain::record::{Record,RecordData};
 use crate::blockchain::block::Block;
@@ -19,7 +20,8 @@ pub struct Node {
     pub leader_addr: Arc<RwLock<Option<String>>>,
     pub blockchain: Blockchain,
     pub leader_condvar: Arc<(Mutex<bool>, Condvar)>,
-    pub alive: Arc<RwLock<bool>>
+    pub alive: Arc<RwLock<bool>>,
+    pub leader_down_convar: Arc<(Mutex<bool>, Condvar)>,
 }
 
 fn build_addr_list(skip_addr: &String) -> Vec<String> {
@@ -55,6 +57,7 @@ impl Node {
             leader_condvar: Arc::new((Mutex::new(false), Condvar::new())),
             other_nodes,
             alive: Arc::new(RwLock::new(true)),
+            leader_down_convar: Arc::new((Mutex::new(false), Condvar::new())),
         }
     }
 
@@ -69,21 +72,16 @@ impl Node {
         let clone_socket = self.socket.try_clone().unwrap();   
         let leader_addr_clone = self.leader_addr.clone();
         let alive_clone = self.alive.clone();
-
         let cv_clone = self.leader_condvar.clone();
 
         thread::spawn(move || {
             let (lock, cv) = &*cv_clone;
-
             let mut leader_found = lock.lock().unwrap();
-
             while !*leader_found {
                 leader_found = cv.wait(leader_found).unwrap();
             }
 
             let leader_addr = (leader_addr_clone.read().unwrap()).clone();
-
-            println!("Leader found: {:?} ", leader_addr);
             let reader = StdinReader::new(clone_socket, leader_addr, alive_clone);
             reader.run();
         });
@@ -103,6 +101,11 @@ impl Node {
                     self.blockchain = self.recv_blockchain();
                     println!("{}", self.blockchain);
                 }
+                LEADER_IS_DOWN => {
+                    if !self.i_am_leader() {
+                        println!("Se cayo el leader!! Que hago???")
+                    }
+                }
                 msg => {
                     let record = self.create_record(msg, from);
                     let mut block = Block::new(self.blockchain.get_last_block_hash());
@@ -115,55 +118,27 @@ impl Node {
                         for node in &*self.other_nodes {
                             self.socket.send_to(&encode_to_bytes(msg), node).unwrap();
                         }
+                    } else {
+                        self.ask_leader_down();
                     }
                     println!("{}", self.blockchain);
-
                 }
             }
         }
-
         println!("Desconectando...");
     }
 
-    fn send_blockchain(&self, from: String) {
-        self.socket.send_to(&encode_to_bytes(BLOCKCHAIN), from.clone()).unwrap();
-        for b in self.blockchain.get_blocks() {
-            let mut data_to_send = String::new();
-            match &b.records[0].record {
-                RecordData::CreateStudent(id, qualification) => {
-                    data_to_send.push_str(
-                        &(format!(
-                            "{},{},{},{}",
-                            &id,
-                            &(qualification.to_string()),
-                            &b.records[0].created_at.as_millis().to_string(),
-                            &b.records[0].from
-                        )),
-                    );
-                }
-            };
+    fn ask_leader_down(&self) -> () {
+        let mut leader_down = LeaderDown::new(
+            self.leader_down_convar.clone(),
+            self.leader_addr.clone(),
+            self.socket.try_clone().expect("Error cloning socket"),
+            self.other_nodes.clone(),
+        );
 
-            self.socket
-                .send_to(&encode_to_bytes(&data_to_send), from.clone().to_string())
-                .unwrap();
-        }
-        self.socket.send_to(&encode_to_bytes(END), from).unwrap();
-    }
-
-    fn recv_blockchain(&self) -> Blockchain {
-        let mut blockchain = Blockchain::new();
-        loop {
-            let (msg, from) = self.read_from();
-            if msg == END {
-                break;
-            }
-            let mut block = Block::new(blockchain.get_last_block_hash());
-            block.add_record(self.read_record(msg, from));
-            if let Err(err) = blockchain.append_block(block) {
-                println!("{}", err);
-            } 
-        }
-        blockchain
+        thread::spawn(move || {
+            leader_down.run();
+        });
     }
 
     fn discover_leader(&self) -> () {
@@ -242,6 +217,47 @@ impl Node {
         } else {
             println!("I am not leader");
         }
+    }
+
+    fn send_blockchain(&self, from: String) {
+        self.socket.send_to(&encode_to_bytes(BLOCKCHAIN), from.clone()).unwrap();
+        for b in self.blockchain.get_blocks() {
+            let mut data_to_send = String::new();
+            match &b.records[0].record {
+                RecordData::CreateStudent(id, qualification) => {
+                    data_to_send.push_str(
+                        &(format!(
+                            "{},{},{},{}",
+                            &id,
+                            &(qualification.to_string()),
+                            &b.records[0].created_at.as_millis().to_string(),
+                            &b.records[0].from
+                        )),
+                    );
+                }
+            };
+
+            self.socket
+                .send_to(&encode_to_bytes(&data_to_send), from.clone().to_string())
+                .unwrap();
+        }
+        self.socket.send_to(&encode_to_bytes(END), from).unwrap();
+    }
+
+    fn recv_blockchain(&self) -> Blockchain {
+        let mut blockchain = Blockchain::new();
+        loop {
+            let (msg, from) = self.read_from();
+            if msg == END {
+                break;
+            }
+            let mut block = Block::new(blockchain.get_last_block_hash());
+            block.add_record(self.read_record(msg, from));
+            if let Err(err) = blockchain.append_block(block) {
+                println!("{}", err);
+            } 
+        }
+        blockchain
     }
 
     fn read_record(&self, msg: String, from: SocketAddr) -> Record {

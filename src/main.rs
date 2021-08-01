@@ -6,6 +6,7 @@ use std::env;
 use std::process;
 
 mod encoder;
+mod leader_down;
 mod utils;
 mod stdin_reader;
 mod leader_discoverer;
