@@ -48,24 +48,21 @@ impl Node {
         let clone_socket = self.socket.try_clone().unwrap();   
         let leader_addr_clone = self.leader_addr.clone();
 
-
         thread::spawn(move || {
             let mut leader_addr = (leader_addr_clone.read().unwrap()).clone();
 
             // FIXME: condvar
-            while leader_addr.is_none()
-            {
+            while leader_addr.is_none() {
                 leader_addr = (leader_addr_clone.read().unwrap()).clone();
                 // DO nothing
             }
-
-            println!("Leader found: {:?} ", leader_addr);
             let reader = StdinReader::new(clone_socket, leader_addr);
             reader.run();
         });
 
         loop {
             let (msg, from)= self.read_from();
+            println!("MSG: {} - FROM: {}",msg, from);
             match msg.as_str() {
                 WHO_IS_LEADER => {
                     println!("A node is asking who the leader is");
@@ -90,25 +87,35 @@ impl Node {
                 BLOCKCHAIN => {
                     println!("No soy el leader, recibir blockchain...");
                     self.blockchain = self.recv_blockchain();
-                    // FIXME: No esta sobre escribiendo mi propia blockchain como deberia
-                    // solo la imprime en pantalla
                 }
                 msg => {
                     let mut clone_addr = (*self.leader_addr.read().unwrap()).clone();
                     let leader_addr = format!("{}", clone_addr.get_or_insert("Error".to_string()));
-                    if format!("{}", from) == leader_addr {
-                        for node in &*self.other_nodes {
-                            self.socket.send_to(&encode_to_bytes(msg), node).unwrap();
+                    
+                    println!("RECV: {} - FROM LEADER?: {} - {}", msg, from, leader_addr);
+                    
+                    let clone_socket = self.socket.try_clone().unwrap();  
+                    let my_addrs = format!("{:?}", clone_socket.local_addr().unwrap());
+                    println!("My ip: {}", my_addrs);
+
+                    if format!("{}", from) == my_addrs {
+                        println!("Recibi del leadr: {}", msg);
+                        let record = self.create_record(msg, from);
+                        let mut block = Block::new(self.blockchain.get_last_block_hash());
+                        block.add_record(record);
+                        if let Err(err) = self.blockchain.append_block(block) {
+                            println!("Error: {}", err);
+                        } 
+                        //self.socket.send_to(&encode_to_bytes(msg), leader_addr).unwrap();
+                    } else {
+                        println!("Recibi: {} de {}", msg, leader_addr);
+                        // checkeo mi propia ip
+                        for node in &*self.other_nodes.clone() {
+                            println!("Enviar {} a {}",msg, node);
                         }
                     } 
-                    let record = self.create_record(msg, from);
-                    let mut block = Block::new(self.blockchain.get_last_block_hash());
-                    block.add_record(record);
-                    if let Err(err) = self.blockchain.append_block(block) {
-                        println!("{}", err);
-                    } else {
-                        println!("{}", self.blockchain);
-                    }
+                    println!("{}", self.blockchain);
+                    
                 }
             }
         }
@@ -138,8 +145,10 @@ impl Node {
             self.socket
                 .send_to(&encode_to_bytes(&data_to_send), from.clone().to_string())
                 .unwrap();
+            println!("Enviar...");
         }
         self.socket.send_to(&encode_to_bytes(END), from).unwrap();
+        println!("Cerrandooooooo ");
     }
 
     fn recv_blockchain(&self) -> Blockchain {
@@ -200,7 +209,6 @@ impl Node {
             if *leader_addr_mut == None {
                 return false;
             }
-            println!("Leader addr: {:?}", *leader_addr_mut);
             return *self.my_address.read().unwrap() == *leader_addr_mut.clone().unwrap();
         }
         else {
@@ -227,8 +235,7 @@ impl Node {
         if self.i_am_leader() {
             print!("Sending to {} that I am leader\n", node_that_asked.clone().to_string());
             self.socket.send_to(&encode_to_bytes(I_AM_LEADER), node_that_asked.clone()).unwrap();
-
-            println!("Soy el leader, enviar blockchain...");
+            println!("Enviar blockchain...");
             self.send_blockchain(node_that_asked.clone());
         }        
         else {
