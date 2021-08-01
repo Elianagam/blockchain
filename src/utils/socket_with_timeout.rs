@@ -1,11 +1,11 @@
 use std::net::{SocketAddr, UdpSocket};
 
-use crate::encoder::{encode_to_bytes, decode_from_bytes};
+use crate::encoder::{decode_from_bytes, encode_to_bytes};
 
 const RECV_BUF_SIZE: usize = 128;
 
 pub struct SocketWithTimeout {
-    socket: UdpSocket, 
+    socket: UdpSocket,
 }
 
 impl SocketWithTimeout {
@@ -17,7 +17,7 @@ impl SocketWithTimeout {
         let clone = self.socket.try_clone().unwrap();
         SocketWithTimeout::new(clone)
     }
- 
+
     pub fn send_to(&mut self, msg: String, addr: String) -> Result<usize, std::io::Error> {
         self.socket.send_to(&encode_to_bytes(msg.as_str()), addr)
     }

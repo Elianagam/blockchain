@@ -1,15 +1,15 @@
-use crate::blockchain::blockchain::Blockchain;
-use crate::stdin_reader::StdinReader;
 use crate::blockchain::block::Block;
-use crate::utils::messages::*;
+use crate::blockchain::blockchain::Blockchain;
+use crate::blockchain::record::{Record, RecordData};
 use crate::leader_discoverer::LeaderDiscoverer;
-use crate::blockchain::record::{RecordData, Record};
+use crate::stdin_reader::StdinReader;
+use crate::utils::messages::*;
 use crate::utils::socket_with_timeout::SocketWithTimeout;
 
+use std::net::{SocketAddr, UdpSocket};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
-use std::net::{UdpSocket, SocketAddr};
-use std::time::{Duration, SystemTime};
 use std::thread;
+use std::time::{Duration, SystemTime};
 
 const MAX_NODES: u32 = 50;
 const ELECTION_TIMEOUT_SECS: u64 = 1;
@@ -22,7 +22,7 @@ pub struct Node {
     pub blockchain: Blockchain,
     pub leader_condvar: Arc<(Mutex<bool>, Condvar)>,
     pub election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
-    pub alive: Arc<RwLock<bool>>
+    pub alive: Arc<RwLock<bool>>,
 }
 
 fn build_addr_list(skip_addr: &String) -> Vec<String> {
@@ -37,11 +37,13 @@ fn build_addr_list(skip_addr: &String) -> Vec<String> {
 }
 
 fn get_port_from_addr(addr: String) -> u32 {
-    addr.split(":").collect::<Vec<&str>>()[1].parse::<u32>().unwrap()
+    addr.split(":").collect::<Vec<&str>>()[1]
+        .parse::<u32>()
+        .unwrap()
 }
 
 fn find_upper_sockets(my_address: &String) -> Vec<String> {
-    let mut upper_nodes = vec!();
+    let mut upper_nodes = vec![];
 
     for n_addr in build_addr_list(&my_address) {
         if get_port_from_addr(my_address.clone()) < get_port_from_addr(n_addr.clone()) {
@@ -51,7 +53,11 @@ fn find_upper_sockets(my_address: &String) -> Vec<String> {
     upper_nodes
 }
 
-fn run_bully_algorithm(my_address: String, mut socket: SocketWithTimeout, election_condvar: Arc<(Mutex<Option<String>>, Condvar)>) {
+fn run_bully_algorithm(
+    my_address: String,
+    mut socket: SocketWithTimeout,
+    election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
+) {
     println!("Running bully algorithm.");
 
     for node in find_upper_sockets(&my_address) {
@@ -66,7 +72,7 @@ fn run_bully_algorithm(my_address: String, mut socket: SocketWithTimeout, electi
 
     if (*result.0).is_none() {
         let mut addr_list = build_addr_list(&my_address);
-        // FIXME. Agregamos nuestra direccion a la lista 
+        // FIXME. Agregamos nuestra direccion a la lista
         // para poder setearnos en nuestro estado interno
         // que somos el coordinador.
         addr_list.push(my_address);
@@ -74,7 +80,6 @@ fn run_bully_algorithm(my_address: String, mut socket: SocketWithTimeout, electi
         for n_addr in addr_list {
             socket.send_to(COORDINATOR.to_string(), n_addr).unwrap();
         }
-
     }
 }
 
@@ -106,10 +111,7 @@ impl Node {
     }
 
     pub fn run(&mut self) -> () {
-        println!(
-            "Running node on: {} ",
-            self.socket.local_addr().to_string()
-        );
+        println!("Running node on: {} ", self.socket.local_addr().to_string());
 
         self.discover_leader();
 
@@ -134,10 +136,6 @@ impl Node {
             let mut reader = StdinReader::new(clone_socket, leader_addr, alive_clone);
             reader.run();
         });
-
-        let me = self.my_address.read().unwrap().clone();
-        let socket = self.socket.try_clone();
-        let cv = self.election_condvar.clone();
 
         while *self.alive.read().unwrap() {
             let (_, from, msg) = self.socket.recv_from();
@@ -176,7 +174,7 @@ impl Node {
                     block.add_record(record);
                     if let Err(err) = self.blockchain.append_block(block) {
                         println!("Error: {}", err);
-                    } 
+                    }
                     if self.i_am_leader() {
                         // Si el mensaje viene del leader, lo propago a todos
                         for node in &*self.other_nodes {
@@ -184,7 +182,6 @@ impl Node {
                         }
                     }
                     println!("{}", self.blockchain);
-
                 }
             }
         }
@@ -193,7 +190,9 @@ impl Node {
     }
 
     fn send_blockchain(&mut self, from: String) {
-        self.socket.send_to(BLOCKCHAIN.to_string(), from.clone()).unwrap();
+        self.socket
+            .send_to(BLOCKCHAIN.to_string(), from.clone())
+            .unwrap();
         for b in self.blockchain.get_blocks() {
             let mut data_to_send = String::new();
             match &b.records[0].record {
@@ -228,7 +227,7 @@ impl Node {
             block.add_record(self.read_record(msg, from));
             if let Err(err) = blockchain.append_block(block) {
                 println!("{}", err);
-            } 
+            }
         }
         blockchain
     }
@@ -271,7 +270,7 @@ impl Node {
     }
 
     // Este metodo se ejecuta cuando se setea un lider externo
-    // como lider. 
+    // como lider.
     fn leader_found(&mut self, leader: SocketAddr) -> () {
         let (lock, cvar) = &*self.leader_condvar;
         let mut leader_found = lock.lock().unwrap();
@@ -325,7 +324,9 @@ impl Node {
                 student_data[0].into(),
                 student_data[1].parse::<u32>().unwrap(),
             ),
-            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap(),
         );
         record
     }

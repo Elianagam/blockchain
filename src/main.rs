@@ -6,9 +6,9 @@ use std::env;
 use std::process;
 
 mod encoder;
-mod utils;
-mod stdin_reader;
 mod leader_discoverer;
+mod stdin_reader;
+mod utils;
 
 fn port_missing() -> i32 {
     println!("Number of port must be specified");
