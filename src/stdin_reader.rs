@@ -10,7 +10,7 @@ const ACK_TIMEOUT_SECS: u64 = 2;
 
 pub struct StdinReader {
     socket: SocketWithTimeout,
-    leader_addr: std::option::Option<std::string::String>,
+    leader_addr: Arc<RwLock<Option<String>>>,
     node_alive: Arc<RwLock<bool>>,
     msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,
     leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
@@ -19,7 +19,7 @@ pub struct StdinReader {
 impl StdinReader {
     pub fn new(
         socket: SocketWithTimeout,
-        leader_addr: Option<std::string::String>,
+        leader_addr: Arc<RwLock<Option<String>>>,
         node_alive: Arc<RwLock<bool>>,
         msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,
         leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
@@ -52,13 +52,13 @@ impl StdinReader {
         let mut clone_addr = self.leader_addr.clone();
         loop {
             let value = self.read_stdin();
-            let addr = format!("{}", clone_addr.get_or_insert("Error".to_string()));
             if &value == CLOSE {
                 let mut guard = self.node_alive.write().unwrap();
                 *guard = false;
                 break;
             }
-            self.socket.send_to(value, addr).unwrap();
+            let addr = clone_addr.read().unwrap().clone();
+            self.socket.send_to(value, addr.unwrap()).unwrap();
 
             let (lock, cv) = &*self.msg_ack_cv;
             let mut guard = lock.lock().unwrap();

@@ -71,15 +71,18 @@ fn run_bully_algorithm(
         socket.send_to(ELECTION.to_string(), node).unwrap();
     }
     let (lock, cvar) = &*election_condvar;
+    let mut current_value: Option<String> = None;
 
-    let mut guard = lock.lock().unwrap();
     let timeout = Duration::from_secs(ELECTION_TIMEOUT_SECS);
 
-    let result = cvar.wait_timeout(guard, timeout).unwrap();
+    {
+        let mut guard = lock.lock().unwrap();
+        let result = cvar.wait_timeout(guard, timeout).unwrap();
 
-    guard = result.0;
+        current_value = (*result.0).clone();
+    }
 
-    if (*guard).is_none() {
+    if current_value.is_none() {
         let mut addr_list = build_addr_list(&my_address);
         // FIXME. Agregamos nuestra direccion a la lista
         // para poder setearnos en nuestro estado interno
@@ -96,19 +99,25 @@ fn run_bully_algorithm(
 fn leader_down_handler(
     leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
     my_address: String,
-    socket: SocketWithTimeout,
+    mut socket: SocketWithTimeout,
     election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
 ) {
-    let (lock, cv) = &*leader_down_cv;
+    loop {
+        let (lock, cv) = &*leader_down_cv;
 
-    let mut leader_down = lock.lock().unwrap();
+        {
+            let mut leader_down = lock.lock().unwrap();
 
-    // *guard: el lider murio 
-    while !*leader_down {
-        leader_down = cv.wait(leader_down).unwrap();
+            println!("Leader down = {}", *leader_down);
+
+            // *guard: el lider murio 
+            while !*leader_down {
+                leader_down = cv.wait(leader_down).unwrap();
+            }
+        }
+
+        run_bully_algorithm(my_address.clone(), socket.try_clone(), election_condvar.clone());
     }
-
-    run_bully_algorithm(my_address, socket, election_condvar);
 }
 
 
@@ -173,10 +182,8 @@ impl Node {
                 }
             }
 
-            let leader_addr = (leader_addr_clone.read().unwrap()).clone();
-
-            println!("Leader found: {:?} ", leader_addr);
-            let mut reader = StdinReader::new(clone_socket, leader_addr, alive_clone, msg_ack_cv_clone, leader_down_cv_clone);
+            println!("Leader found: {:?} ", leader_addr_clone);
+            let mut reader = StdinReader::new(clone_socket, leader_addr_clone, alive_clone, msg_ack_cv_clone, leader_down_cv_clone);
             reader.run();
         });
 
@@ -332,6 +339,10 @@ impl Node {
             "La direccion del leader es: {}",
             leader_addr.get_or_insert("No address".to_string())
         );
+
+        let (lock, _) = &*self.leader_down;
+        *lock.lock().unwrap() = false;
+        println!("Seteado leader_down en false");
     }
 
     fn check_if_i_am_leader(&mut self, node_that_asked: String) -> () {
