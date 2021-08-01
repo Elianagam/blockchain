@@ -87,7 +87,8 @@ impl Node {
                 BLOCKCHAIN => {
                     println!("No soy el leader, recibir blockchain...");
                     self.recv_blockchain();
-                    // recibir blockchain
+                    // FIXME: No esta sobre escribiendo mi propia blockchain como deberia
+                    // solo la imprime en pantalla
                 }
                 msg => {
                     let mut clone_addr = (*self.leader_addr.read().unwrap()).clone();
