@@ -89,7 +89,10 @@ impl StdinReader {
 
         match option.as_str() {
             "1" => { return self.option_add_block(); }
-            "2" => { println!("{}", self.blockchain) }
+            "2" => { 
+                let blockchain = self.blockchain.read().unwrap().clone();
+                println!("{}", blockchain);
+            }
             "3" => { return CLOSE.to_string() }
             _ => {
                 println!("Invalid option, choose again...")
