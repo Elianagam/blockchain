@@ -17,7 +17,7 @@ pub struct StdinReader {
     node_alive: Arc<RwLock<bool>>,
     msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,
     leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
-    blockchain: Arc<Blockchain>
+    blockchain: Arc<RwLock<Blockchain>>
 }
 
 impl StdinReader {
@@ -28,7 +28,7 @@ impl StdinReader {
         node_alive: Arc<RwLock<bool>>,
         msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,
         leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
-    blockchain: Arc<Blockchain>
+    blockchain: Arc<RwLock<Blockchain>>
 
     ) -> Self {
         StdinReader {
@@ -89,7 +89,10 @@ impl StdinReader {
 
         match option.as_str() {
             "1" => { return self.option_add_block(); }
-            "2" => { println!("{}", self.blockchain) }
+            "2" => { 
+                let blockchain = self.blockchain.read().unwrap().clone();
+                println!("{}", blockchain);
+            }
             "3" => { return CLOSE.to_string() }
             _ => {
                 println!("Invalid option, choose again...")

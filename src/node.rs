@@ -6,6 +6,7 @@ use crate::leader_down_handler::LeaderDownHandler;
 use crate::stdin_reader::StdinReader;
 use crate::utils::messages::*;
 use crate::utils::socket_with_timeout::SocketWithTimeout;
+use std::io::Read;
 
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
@@ -19,7 +20,7 @@ pub struct Node {
     pub socket: SocketWithTimeout,
     pub other_nodes: Arc<Vec<String>>,
     pub leader_addr: Arc<RwLock<Option<String>>>,
-    pub blockchain: Arc<Blockchain>,
+    pub blockchain: Arc<RwLock<Blockchain>>,
     pub leader_condvar: Arc<(Mutex<bool>, Condvar)>,
     pub election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
 
@@ -63,7 +64,7 @@ impl Node {
             my_address: Arc::new(RwLock::new(my_address.clone())),
             socket: SocketWithTimeout::new(socket),
             leader_addr: Arc::new(RwLock::new(None)),
-            blockchain: Arc::new(Blockchain::new()),
+            blockchain: Arc::new(RwLock::new(Blockchain::new())),
             leader_condvar: Arc::new((Mutex::new(false), Condvar::new())),
             election_condvar: Arc::new((Mutex::new(None), Condvar::new())),
             alive: Arc::new(RwLock::new(true)),
@@ -93,7 +94,7 @@ impl Node {
                     self.handle_coordinator_msg(from);
                 }
                 BLOCKCHAIN => {
-                    self.blockchain = Arc::new(self.recv_blockchain());
+                    self.blockchain = Arc::new(RwLock::new(self.recv_blockchain()));
                 }
                 OK => {
                     // Basicamente cada vez que recibamos un mensaje le hacemos un notify
@@ -125,12 +126,12 @@ impl Node {
 
     fn handle_msg(&mut self, msg: &str, from: SocketAddr) {
         let record = self.create_record(msg, from);
-        let mut block = Block::new(self.blockchain.get_last_block_hash());
+        let mut block = Block::new(self.blockchain.read().unwrap().get_last_block_hash());
         block.add_record(record);
-        /*let _ = match self.blockchain.unwrap().append_block(block) {
-            Err(err) => println!("Error: {}", err),
-            Ok(_) => {}
-        };*/
+        if let Err(err) = (self.blockchain.read().unwrap()).append_block(block) {
+            println!("Error: {}", err);
+        }
+        println!("{}", self.blockchain.read().unwrap());
         if self.i_am_leader() {
             self.socket
                 .send_to(ACK_MSG.to_string(), from.to_string())
@@ -239,7 +240,7 @@ impl Node {
         self.socket
             .send_to(BLOCKCHAIN.to_string(), from.clone())
             .unwrap();
-        for b in self.blockchain.get_blocks() {
+        for b in self.blockchain.read().unwrap().get_blocks() {
             let mut data_to_send = String::new();
             match &b.records[0].record {
                 RecordData::CreateStudent(id, qualification) => {
