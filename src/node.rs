@@ -136,7 +136,6 @@ impl Node {
                     cvar.notify_all();
                 }
                 ELECTION => {
-                    println!("Recibido mensaje ELECTION de {}", from);
                     self.socket
                         .send_to(OK.to_string(), from.to_string())
                         .unwrap();
