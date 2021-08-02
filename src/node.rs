@@ -127,15 +127,10 @@ impl Node {
 
     fn handle_msg(&mut self, msg: &str, from: SocketAddr) {
         let record = self.create_record(msg, from);
-        let mut block;
-        if let Ok(mut blockchain_mut) = self.blockchain.read() {
-            block = Block::new(blockchain_mut.get_last_block_hash());
-        }
-        block.add_record(record);
-        
-        //let blockchain = self.blockchain.clone();
         
         if let Ok(mut blockchain_mut) = self.blockchain.write() {
+            let mut block = Block::new(blockchain_mut.get_last_block_hash());
+            block.add_record(record);
             blockchain_mut.append_block(block);
         }
 
