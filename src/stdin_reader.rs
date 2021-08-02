@@ -9,6 +9,7 @@ use crate::utils::socket_with_timeout::SocketWithTimeout;
 const ACK_TIMEOUT_SECS: u64 = 2;
 
 pub struct StdinReader {
+    leader_condvar: Arc<(Mutex<bool>, Condvar)>,
     socket: SocketWithTimeout,
     leader_addr: Arc<RwLock<Option<String>>>,
     node_alive: Arc<RwLock<bool>>,
@@ -18,6 +19,7 @@ pub struct StdinReader {
 
 impl StdinReader {
     pub fn new(
+        leader_condvar: Arc<(Mutex<bool>, Condvar)>,
         socket: SocketWithTimeout,
         leader_addr: Arc<RwLock<Option<String>>>,
         node_alive: Arc<RwLock<bool>>,
@@ -25,6 +27,7 @@ impl StdinReader {
         leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
     ) -> Self {
         StdinReader {
+            leader_condvar,
             socket,
             leader_addr,
             node_alive,
@@ -50,6 +53,14 @@ impl StdinReader {
 
     pub fn run(&mut self) {
         loop {
+            let (lock, cv) = &*self.leader_condvar;
+            {
+                let mut leader_found = lock.lock().unwrap();
+                while !*leader_found {
+                    leader_found = cv.wait(leader_found).unwrap();
+                }
+            }
+
             let value = self.read_stdin();
             if &value == CLOSE {
                 let mut guard = self.node_alive.write().unwrap();
