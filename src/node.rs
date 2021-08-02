@@ -2,6 +2,7 @@ use crate::blockchain::block::Block;
 use crate::blockchain::blockchain::Blockchain;
 use crate::blockchain::record::{Record, RecordData};
 use crate::leader_discoverer::LeaderDiscoverer;
+use crate::leader_down_handler::LeaderDownHandler;
 use crate::stdin_reader::StdinReader;
 use crate::utils::messages::*;
 use crate::utils::socket_with_timeout::SocketWithTimeout;
@@ -44,88 +45,6 @@ fn build_addr_list(skip_addr: &String) -> Vec<String> {
     addrs
 }
 
-fn get_port_from_addr(addr: String) -> u32 {
-    addr.split(":").collect::<Vec<&str>>()[1]
-        .parse::<u32>()
-        .unwrap()
-}
-
-fn find_upper_sockets(my_address: &String) -> Vec<String> {
-    let mut upper_nodes = vec![];
-
-    for n_addr in build_addr_list(&my_address) {
-        if get_port_from_addr(my_address.clone()) < get_port_from_addr(n_addr.clone()) {
-            upper_nodes.push(n_addr);
-        }
-    }
-    upper_nodes
-}
-
-fn run_bully_algorithm(
-    my_address: String,
-    mut socket: SocketWithTimeout,
-    election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
-) {
-    println!("<> Running bully algorithm. <>");
-
-    for node in find_upper_sockets(&my_address) {
-        socket.send_to(ELECTION.to_string(), node).unwrap();
-    }
-    let (lock, cvar) = &*election_condvar;
-    let current_value;
-
-    let timeout = Duration::from_secs(ELECTION_TIMEOUT_SECS);
-
-    {
-        let guard = lock.lock().unwrap();
-        let result = cvar.wait_timeout(guard, timeout).unwrap();
-
-        current_value = (*result.0).clone();
-    }
-
-    if current_value.is_none() {
-        let mut addr_list = build_addr_list(&my_address);
-        // FIXME. Agregamos nuestra direccion a la lista
-        // para poder setearnos en nuestro estado interno
-        // que somos el coordinador.
-        addr_list.push(my_address);
-
-        for n_addr in addr_list {
-            println!("Enviando mensaje coordinator a {}", n_addr);
-            socket.send_to(COORDINATOR.to_string(), n_addr).unwrap();
-        }
-    }
-}
-
-fn leader_down_handler(
-    leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
-    my_address: String,
-    mut socket: SocketWithTimeout,
-    election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
-    running_bully: Arc<Mutex<bool>>,
-) {
-    loop {
-        let (lock, cv) = &*leader_down_cv;
-
-        {
-            let mut leader_down = lock.lock().unwrap();
-            // *guard: el lider murio
-            while !*leader_down {
-                leader_down = cv.wait(leader_down).unwrap();
-            }
-        }
-
-        if !*running_bully.lock().unwrap() {
-            *running_bully.lock().unwrap() = true;
-            run_bully_algorithm(
-                my_address.clone(),
-                socket.try_clone(),
-                election_condvar.clone(),
-            );
-        }
-    }
-}
-
 impl Node {
     pub fn new(port_number: &str) -> Self {
         let port_number = port_number.parse::<u32>().unwrap();
@@ -159,16 +78,9 @@ impl Node {
     pub fn run(&mut self) -> () {
         println!("Running node on: {} ", self.socket.local_addr().to_string());
 
-        // Run bully handle in another thread.
-        let me = self.my_address.read().unwrap().clone();
-        let socket = self.socket.try_clone();
-        let cv = self.election_condvar.clone();
-        let leader_down_cv = self.leader_down.clone();
-        let running_bully = self.running_bully.clone();
-
-        thread::spawn(move || leader_down_handler(leader_down_cv, me, socket, cv, running_bully));
-
         self.discover_leader();
+
+        self.detect_if_leader_is_down();
 
         let clone_socket = self.socket.try_clone();
         let leader_addr_clone = self.leader_addr.clone();
@@ -314,6 +226,20 @@ impl Node {
 
         thread::spawn(move || {
             leader_discoverer.run();
+        });
+    }
+
+    fn detect_if_leader_is_down(&mut self) -> () {
+
+        let mut leader_down_handler = LeaderDownHandler::new(
+            self.my_address.clone(),
+            self.socket.try_clone(),
+            self.election_condvar.clone(),
+            self.leader_down.clone(),
+            self.running_bully.clone());
+
+        thread::spawn(move || {
+            leader_down_handler.run();
         });
     }
 

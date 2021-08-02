@@ -7,6 +7,7 @@ use std::process;
 
 mod encoder;
 mod leader_discoverer;
+mod leader_down_handler;
 mod stdin_reader;
 mod utils;
 
