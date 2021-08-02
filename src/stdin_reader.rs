@@ -63,24 +63,28 @@ impl StdinReader {
 
             self.socket.send_to(value, addr.unwrap()).unwrap();
 
-            let (lock, cv) = &*self.msg_ack_cv;
-            let mut guard = lock.lock().unwrap();
-
-            //TODO. add guard for spurious wake up
-            let result = cv
-                .wait_timeout(guard, Duration::from_secs(ACK_TIMEOUT_SECS))
-                .unwrap();
-
-            guard = result.0;
-
-            if !*guard {
-                let (lock_leader_down, cv_leader_down) = &*self.leader_down_cv;
-                let mut guard_leader_down = lock_leader_down.lock().unwrap();
-
-                *guard_leader_down = true;
-                cv_leader_down.notify_all();
-            }
-            *guard = false;
+            self.handler_ack();
         }
+    }
+
+    fn handler_ack(&self) {
+        let (lock, cv) = &*self.msg_ack_cv;
+        let mut guard = lock.lock().unwrap();
+
+        //TODO. add guard for spurious wake up
+        let result = cv
+            .wait_timeout(guard, Duration::from_secs(ACK_TIMEOUT_SECS))
+            .unwrap();
+
+        guard = result.0;
+
+        if !*guard {
+            let (lock_leader_down, cv_leader_down) = &*self.leader_down_cv;
+            let mut guard_leader_down = lock_leader_down.lock().unwrap();
+
+            *guard_leader_down = true;
+            cv_leader_down.notify_all();
+        }
+        *guard = false;
     }
 }
