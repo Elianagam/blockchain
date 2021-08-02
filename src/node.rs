@@ -94,8 +94,9 @@ impl Node {
                     self.handle_coordinator_msg(from);
                 }
                 BLOCKCHAIN => {
+                    let blockchain = self.recv_blockchain().clone();
                     if let Ok(mut blockchain_mut) = self.blockchain.write() {
-                        *blockchain_mut = self.recv_blockchain();
+                        *blockchain_mut = blockchain;
                     }
                 }
                 OK => {
