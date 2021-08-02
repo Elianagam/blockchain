@@ -58,15 +58,15 @@ impl StdinReader {
     }
 
     pub fn run(&mut self) {
-        loop {
-            let (lock, cv) = &*self.leader_condvar;
-            {
-                let mut leader_found = lock.lock().unwrap();
-                while !*leader_found {
-                    leader_found = cv.wait(leader_found).unwrap();
-                }
-            }
+        let (lock, cv) = &*self.leader_condvar;
 
+        {
+            let mut leader_found = lock.lock().unwrap();
+            while !*leader_found {
+                leader_found = cv.wait(leader_found).unwrap();
+            }
+        }
+        loop {
             let value = self.read_stdin();
             if &value == CLOSE {
                 let mut guard = self.node_alive.write().unwrap();
@@ -101,26 +101,30 @@ impl StdinReader {
 
             println!("Lock released");
 
-            let (lock, cv) = &*self.msg_ack_cv;
-            let mut guard = lock.lock().unwrap();
-
-            //TODO. add guard for spurious wake up
-            let result = cv
-                .wait_timeout(guard, Duration::from_secs(ACK_TIMEOUT_SECS))
-                .unwrap();
-
-            guard = result.0;
-
-            if !*guard {
-                let (lock_leader_down, cv_leader_down) = &*self.leader_down_cv;
-                let mut guard_leader_down = lock_leader_down.lock().unwrap();
-
-                *guard_leader_down = true;
-                cv_leader_down.notify_all();
-            }
-            *guard = false;
-
-            // TODO: If timeout: Wait for new leader and do this all over again
+            self.handler_ack();
         }
+    }
+
+    fn handler_ack(&self) {
+        let (lock, cv) = &*self.msg_ack_cv;
+        let mut guard = lock.lock().unwrap();
+
+        //TODO. add guard for spurious wake up
+        let result = cv
+            .wait_timeout(guard, Duration::from_secs(ACK_TIMEOUT_SECS))
+            .unwrap();
+
+        guard = result.0;
+
+        if !*guard {
+            let (lock_leader_down, cv_leader_down) = &*self.leader_down_cv;
+            let mut guard_leader_down = lock_leader_down.lock().unwrap();
+
+            *guard_leader_down = true;
+            cv_leader_down.notify_all();
+        }
+        *guard = false;
+
+        // TODO: If timeout: Wait for new leader and do this all over again
     }
 }
