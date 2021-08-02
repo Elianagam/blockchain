@@ -133,7 +133,10 @@ impl Node {
         if let Ok(mut blockchain_mut) = self.blockchain.write() {
             let mut block = Block::new(blockchain_mut.get_last_block_hash());
             block.add_record(record);
-            blockchain_mut.append_block(block);
+            match blockchain_mut.append_block(block) {
+                Err(_) => println!("Error"),
+                Ok(_) => {}
+            };
         }
 
         if self.i_am_leader() {
@@ -245,7 +248,7 @@ impl Node {
             .send_to(BLOCKCHAIN.to_string(), from.clone())
             .unwrap();
 
-        if let Ok(mut blockchain_mut) = self.blockchain.read() {
+        if let Ok(blockchain_mut) = self.blockchain.read() {
             for b in blockchain_mut.get_blocks() {
                 let mut data_to_send = String::new();
                 match &b.records[0].record {
