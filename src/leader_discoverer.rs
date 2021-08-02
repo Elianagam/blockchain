@@ -43,7 +43,6 @@ impl LeaderDiscoverer {
                 .unwrap();
         }
 
-        println!("Waiting for leader");
         let time = time::Instant::now();
 
         let (lock, cvar) = &*self.condvar;
@@ -53,16 +52,13 @@ impl LeaderDiscoverer {
             let result = cvar
                 .wait_timeout(leader_found, Duration::from_millis(1000))
                 .unwrap();
-            println!("searching leader");
             let now = time::Instant::now();
             leader_found = result.0;
             if *leader_found == true {
-                println!("Leader found");
                 break;
             } else if now.duration_since(time).as_secs() >= LEADER_DISCOVER_TIMEOUT_SECS {
                 println!("TIMEOUT: Leader not found, I become leader");
                 if let Ok(mut leader_addr_mut) = self.leader_addr.write() {
-                    println!("Setting leader addr to mine");
                     *leader_addr_mut = Some((*self.my_address.read().unwrap()).clone());
 
                     for node in &*self.other_nodes {

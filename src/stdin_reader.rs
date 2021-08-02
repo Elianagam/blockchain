@@ -1,6 +1,6 @@
 use std::io::{self, BufRead};
 use std::option::Option;
-use std::sync::{Arc, RwLock, Mutex, Condvar};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
 
 use crate::utils::messages::CLOSE;
@@ -29,7 +29,7 @@ impl StdinReader {
             leader_addr,
             node_alive,
             msg_ack_cv,
-            leader_down_cv
+            leader_down_cv,
         }
     }
 
@@ -49,7 +49,6 @@ impl StdinReader {
     }
 
     pub fn run(&mut self) {
-        let mut clone_addr = self.leader_addr.clone();
         loop {
             let value = self.read_stdin();
             if &value == CLOSE {
@@ -57,14 +56,20 @@ impl StdinReader {
                 *guard = false;
                 break;
             }
-            let addr = clone_addr.read().unwrap().clone();
+            let addr = self.leader_addr.read().unwrap().clone();
+            if addr.is_none() {
+                continue;
+            }
+
             self.socket.send_to(value, addr.unwrap()).unwrap();
 
             let (lock, cv) = &*self.msg_ack_cv;
             let mut guard = lock.lock().unwrap();
 
             //TODO. add guard for spurious wake up
-            let result = cv.wait_timeout(guard, Duration::from_secs(ACK_TIMEOUT_SECS)).unwrap();
+            let result = cv
+                .wait_timeout(guard, Duration::from_secs(ACK_TIMEOUT_SECS))
+                .unwrap();
 
             guard = result.0;
 
@@ -73,7 +78,6 @@ impl StdinReader {
                 let mut guard_leader_down = lock_leader_down.lock().unwrap();
 
                 *guard_leader_down = true;
-                println!("**** LEADER DOWN DETECTED ****");
                 cv_leader_down.notify_all();
             }
             *guard = false;

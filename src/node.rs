@@ -30,6 +30,7 @@ pub struct Node {
     pub msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,
 
     pub leader_down: Arc<(Mutex<bool>, Condvar)>,
+    pub running_bully: Arc<Mutex<bool>>,
 }
 
 fn build_addr_list(skip_addr: &String) -> Vec<String> {
@@ -65,18 +66,18 @@ fn run_bully_algorithm(
     mut socket: SocketWithTimeout,
     election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
 ) {
-    println!("Running bully algorithm.");
+    println!("<> Running bully algorithm. <>");
 
     for node in find_upper_sockets(&my_address) {
         socket.send_to(ELECTION.to_string(), node).unwrap();
     }
     let (lock, cvar) = &*election_condvar;
-    let mut current_value: Option<String> = None;
+    let current_value;
 
     let timeout = Duration::from_secs(ELECTION_TIMEOUT_SECS);
 
     {
-        let mut guard = lock.lock().unwrap();
+        let guard = lock.lock().unwrap();
         let result = cvar.wait_timeout(guard, timeout).unwrap();
 
         current_value = (*result.0).clone();
@@ -89,8 +90,8 @@ fn run_bully_algorithm(
         // que somos el coordinador.
         addr_list.push(my_address);
 
-        println!("Proclamandome como lider!");
         for n_addr in addr_list {
+            println!("Enviando mensaje coordinator a {}", n_addr);
             socket.send_to(COORDINATOR.to_string(), n_addr).unwrap();
         }
     }
@@ -101,25 +102,29 @@ fn leader_down_handler(
     my_address: String,
     mut socket: SocketWithTimeout,
     election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
+    running_bully: Arc<Mutex<bool>>,
 ) {
     loop {
         let (lock, cv) = &*leader_down_cv;
 
         {
             let mut leader_down = lock.lock().unwrap();
-
-            println!("Leader down = {}", *leader_down);
-
-            // *guard: el lider murio 
+            // *guard: el lider murio
             while !*leader_down {
                 leader_down = cv.wait(leader_down).unwrap();
             }
         }
 
-        run_bully_algorithm(my_address.clone(), socket.try_clone(), election_condvar.clone());
+        if !*running_bully.lock().unwrap() {
+            *running_bully.lock().unwrap() = true;
+            run_bully_algorithm(
+                my_address.clone(),
+                socket.try_clone(),
+                election_condvar.clone(),
+            );
+        }
     }
 }
-
 
 impl Node {
     pub fn new(port_number: &str) -> Self {
@@ -143,10 +148,11 @@ impl Node {
             blockchain: Blockchain::new(),
             leader_condvar: Arc::new((Mutex::new(false), Condvar::new())),
             election_condvar: Arc::new((Mutex::new(None), Condvar::new())),
-            other_nodes,
             alive: Arc::new(RwLock::new(true)),
             msg_ack_cv: Arc::new((Mutex::new(false), Condvar::new())),
             leader_down: Arc::new((Mutex::new(false), Condvar::new())),
+            running_bully: Arc::new(Mutex::new(false)),
+            other_nodes,
         }
     }
 
@@ -157,9 +163,10 @@ impl Node {
         let me = self.my_address.read().unwrap().clone();
         let socket = self.socket.try_clone();
         let cv = self.election_condvar.clone();
-        let leader_down_cv_clone = self.leader_down.clone();
+        let leader_down_cv = self.leader_down.clone();
+        let running_bully = self.running_bully.clone();
 
-        thread::spawn(move || leader_down_handler(leader_down_cv_clone, me, socket, cv));
+        thread::spawn(move || leader_down_handler(leader_down_cv, me, socket, cv, running_bully));
 
         self.discover_leader();
 
@@ -169,11 +176,13 @@ impl Node {
 
         let cv_clone = self.leader_condvar.clone();
         let msg_ack_cv_clone = self.msg_ack_cv.clone();
-        let leader_down_cv_clone = self.leader_down.clone();
+        let leader_down_cv = self.leader_down.clone();
 
         thread::spawn(move || {
             let (lock, cv) = &*cv_clone;
 
+            //TODO. esta logica habria que moverla dentro del stdinreader
+            // cuando esta en el loop principal/
             {
                 let mut leader_found = lock.lock().unwrap();
 
@@ -182,8 +191,13 @@ impl Node {
                 }
             }
 
-            println!("Leader found: {:?} ", leader_addr_clone);
-            let mut reader = StdinReader::new(clone_socket, leader_addr_clone, alive_clone, msg_ack_cv_clone, leader_down_cv_clone);
+            let mut reader = StdinReader::new(
+                clone_socket,
+                leader_addr_clone,
+                alive_clone,
+                msg_ack_cv_clone,
+                leader_down_cv,
+            );
             reader.run();
         });
 
@@ -196,7 +210,7 @@ impl Node {
                     }
                 }
                 COORDINATOR => {
-                    self.leader_found(from);
+                    self.handle_coordinator_msg(from);
                 }
                 BLOCKCHAIN => {
                     self.blockchain = self.recv_blockchain();
@@ -210,7 +224,10 @@ impl Node {
                     cvar.notify_all();
                 }
                 ELECTION => {
-                    self.socket.send_to(OK.to_string(), from.to_string()).unwrap();
+                    println!("Recibido mensaje ELECTION de {}", from);
+                    self.socket
+                        .send_to(OK.to_string(), from.to_string())
+                        .unwrap();
 
                     let (lock, cvar) = &*self.leader_down;
                     *lock.lock().unwrap() = true;
@@ -229,7 +246,9 @@ impl Node {
                         println!("Error: {}", err);
                     }
                     if self.i_am_leader() {
-                        self.socket.send_to(ACK_MSG.to_string(), from.to_string()).unwrap();
+                        self.socket
+                            .send_to(ACK_MSG.to_string(), from.to_string())
+                            .unwrap();
                         // Si el mensaje viene del leader, lo propago a todos
                         for node in &*self.other_nodes {
                             self.socket.send_to(msg.to_string(), node.clone()).unwrap();
@@ -239,8 +258,6 @@ impl Node {
                 }
             }
         }
-
-        println!("Desconectando...");
     }
 
     fn send_blockchain(&mut self, from: String) {
@@ -303,14 +320,11 @@ impl Node {
     fn i_know_the_leader(&mut self) -> bool {
         if let Ok(leader_addr_mut) = self.leader_addr.read() {
             return !leader_addr_mut.is_none();
-        } else {
-            println!("Leader is being changed");
-            return false;
         }
+        false
     }
 
     fn i_am_leader(&mut self) -> bool {
-        println!("my address: {} ", self.my_address.read().unwrap());
         if let Ok(leader_addr_mut) = self.leader_addr.read() {
             if *leader_addr_mut == None {
                 return false;
@@ -318,14 +332,11 @@ impl Node {
             return *self.my_address.read().unwrap() == *leader_addr_mut.clone().unwrap();
         } else {
             // FIXME
-            println!("not implemented");
-            return false;
+            panic!("Not implemented");
         }
     }
 
-    // Este metodo se ejecuta cuando se setea un lider externo
-    // como lider.
-    fn leader_found(&mut self, leader: SocketAddr) -> () {
+    fn handle_coordinator_msg(&mut self, leader: SocketAddr) -> () {
         let (lock, cvar) = &*self.leader_condvar;
         let mut leader_found = lock.lock().unwrap();
         *leader_found = true;
@@ -335,29 +346,23 @@ impl Node {
             *leader_addr_mut = Some(leader.to_string());
         }
         let mut leader_addr = (*self.leader_addr.read().unwrap()).clone();
+
         println!(
-            "La direccion del leader es: {}",
-            leader_addr.get_or_insert("No address".to_string())
+            "New leader found in address: {}",
+            leader_addr.get_or_insert("??".to_string())
         );
 
         let (lock, _) = &*self.leader_down;
         *lock.lock().unwrap() = false;
-        println!("Seteado leader_down en false");
+        *self.running_bully.lock().unwrap() = false;
     }
 
     fn check_if_i_am_leader(&mut self, node_that_asked: String) -> () {
-        println!("Checking if I'm leader");
         if self.i_am_leader() {
-            print!(
-                "Sending to {} that I am leader",
-                node_that_asked.to_string()
-            );
             self.socket
                 .send_to(COORDINATOR.to_string(), node_that_asked.clone())
                 .unwrap();
             self.send_blockchain(node_that_asked.clone());
-        } else {
-            println!("I am not leader");
         }
     }
 
