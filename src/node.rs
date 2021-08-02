@@ -1,96 +1,137 @@
-use std::net::{SocketAddr, UdpSocket};
-use std::sync::{Arc, Mutex, Condvar, RwLock};
-use crate::encoder::{decode_from_bytes, encode_to_bytes};
-use std::thread;
-use std_semaphore::Semaphore;
-use std::time::Duration;
+use crate::blockchain::block::Block;
 use crate::blockchain::blockchain::Blockchain;
+use crate::blockchain::record::{Record, RecordData};
 use crate::leader_discoverer::LeaderDiscoverer;
+use crate::leader_down_handler::LeaderDownHandler;
+use crate::stdin_reader::StdinReader;
 use crate::utils::messages::*;
+use crate::utils::socket_with_timeout::SocketWithTimeout;
+
+use std::net::{SocketAddr, UdpSocket};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
+use std::thread;
+use std::time::{Duration, SystemTime};
+use std_semaphore::Semaphore;
+
+const MAX_NODES: u32 = 50;
 
 pub struct Node {
     pub my_address: Arc<RwLock<String>>,
-    pub socket: UdpSocket,
+    pub socket: SocketWithTimeout,
     pub other_nodes: Arc<Vec<String>>,
     pub leader_addr: Arc<RwLock<Option<String>>>,
     pub blockchain: Blockchain,
     pub leader_condvar: Arc<(Mutex<bool>, Condvar)>,
     pub mutex: Arc<Semaphore>,
     pub pending_acquires: Vec<String>,
-    pub node_id_with_mutex: Arc<RwLock<Option<SocketAddr>>>
+    pub node_id_with_mutex: Arc<RwLock<Option<SocketAddr>>>,
+    pub election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
+
+    // El nodo esta vivo (no se hizo `close`)
+    pub alive: Arc<RwLock<bool>>,
+
+    // Convar para detectar mensajes ack
+    pub msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,
+
+    pub leader_down: Arc<(Mutex<bool>, Condvar)>,
+    pub running_bully: Arc<Mutex<bool>>,
+}
+
+fn build_addr_list(skip_addr: &String) -> Vec<String> {
+    let mut addrs = vec![];
+    for i in 0..MAX_NODES {
+        let addr = format!("127.0.0.1:{}", 8000 + i);
+        if &addr != skip_addr {
+            addrs.push(addr);
+        }
+    }
+    addrs
 }
 
 impl Node {
     pub fn new(port_number: &str) -> Self {
-        let mut other_nodes = vec!["127.0.0.1:8080".to_string(), 
-                                          "127.0.0.1:8081".to_string(),
-                                          "127.0.0.1:8082".to_string(),
-                                          "127.0.0.1:8083".to_string(),
-                                          "127.0.0.1:8084".to_string()];
+        let port_number = port_number.parse::<u32>().unwrap();
+        if port_number < 8000 || port_number > (8000 + MAX_NODES) {
+            panic!(
+                "Port number must be between {} and {}",
+                8000,
+                8000 + MAX_NODES
+            );
+        }
+        let my_address: String = format!("127.0.0.1:{}", port_number);
 
-        let mut my_address: String = "127.0.0.1:".to_owned();
-        my_address.push_str(port_number);
-        other_nodes.retain(|x| x != &my_address);
-    
+        let other_nodes = Arc::new(build_addr_list(&my_address));
+        let socket = UdpSocket::bind(my_address.clone()).unwrap();
+
         Node {
             my_address: Arc::new(RwLock::new(my_address.clone())),
-            socket: UdpSocket::bind(my_address.clone()).unwrap(),
-            other_nodes: Arc::new(other_nodes),
+            socket: SocketWithTimeout::new(socket),
             leader_addr: Arc::new(RwLock::new(None)),
             blockchain: Blockchain::new(),
             leader_condvar: Arc::new((Mutex::new(false), Condvar::new())),
             mutex: Arc::new(Semaphore::new(1)),
             pending_acquires: vec![],
-            node_id_with_mutex: Arc::new(RwLock::new(None))
+            node_id_with_mutex: Arc::new(RwLock::new(None)),
+            election_condvar: Arc::new((Mutex::new(None), Condvar::new())),
+            alive: Arc::new(RwLock::new(true)),
+            msg_ack_cv: Arc::new((Mutex::new(false), Condvar::new())),
+            leader_down: Arc::new((Mutex::new(false), Condvar::new())),
+            running_bully: Arc::new(Mutex::new(false)),
+            other_nodes,
         }
     }
 
     pub fn run(&mut self) -> () {
-        println!("Running node on: {} ", self.socket.local_addr().unwrap().to_string());
+        println!("Running node on: {} ", self.socket.local_addr().to_string());
 
         self.discover_leader();
+        self.detect_if_leader_is_down();
 
-        let socket_clone = self.socket.try_clone().unwrap();
+        let clone_socket = self.socket.try_clone();
         let leader_addr_clone = self.leader_addr.clone();
-        let my_address_clone = self.my_address.clone();
+        let alive_clone = self.alive.clone();
+
+        let cv_clone = self.leader_condvar.clone();
+        let msg_ack_cv_clone = self.msg_ack_cv.clone();
+        let leader_down_cv = self.leader_down.clone();
 
         thread::spawn(move || {
-            let leader_addr = (leader_addr_clone.read().unwrap()).clone();
-            while leader_addr.is_none()
-            {
-                // DO nothing
-            }
-            
-            if *my_address_clone.read().unwrap() != (*leader_addr_clone.read().unwrap()).clone().unwrap()
-            {
-                socket_clone.send_to(&encode_to_bytes(ACQUIRE_MSG), leader_addr.clone().unwrap()).unwrap();
-                println!("Sent acquire");
+            let (lock, cv) = &*cv_clone;
 
-                thread::sleep(Duration::from_secs(10));
+            //TODO. esta logica habria que moverla dentro del stdinreader
+            // cuando esta en el loop principal/
+            {
+                let mut leader_found = lock.lock().unwrap();
 
-                socket_clone.send_to(&encode_to_bytes(RELEASE_MSG), leader_addr.clone().unwrap()).unwrap();
-                println!("Sent release");
+                while !*leader_found {
+                    leader_found = cv.wait(leader_found).unwrap();
+                }
             }
-            
+
+            let mut reader = StdinReader::new(
+                clone_socket,
+                leader_addr_clone,
+                alive_clone,
+                msg_ack_cv_clone,
+                leader_down_cv,
+            );
+            reader.run();
         });
 
-        loop {
-            let (msg, from)= self.read_from();
+        while *self.alive.read().unwrap() {
+            let (_, from, msg) = self.socket.recv_from();
             match msg.as_str() {
                 WHO_IS_LEADER => {
-                    println!("A node is asking who the leader is");
-                    if self.i_know_the_leader() 
-                    {
-                        println!("I know the leader");
+                    if self.i_know_the_leader() {
                         self.check_if_i_am_leader(from.to_string());
                     }
-                    else{
-                        println!("I don't know the leader");
-                    }
                 }
-                I_AM_LEADER => {
-                    println!("Someone said he is leader");
-                    self.leader_found(from);
+                COORDINATOR => {
+                    self.handle_coordinator_msg(from);
+                }
+                BLOCKCHAIN => {
+                    self.blockchain = self.recv_blockchain();
+                    println!("{}", self.blockchain);
                 }
                 ACQUIRE_MSG => {
                     if self.i_am_leader() {
@@ -103,71 +144,140 @@ impl Node {
                         self.node_releasing_mutex(from);
                     }
                 }
-                CLOSE => {
-                    break;
+                OK => {
+                    // Basicamente cada vez que recibamos un mensaje le hacemos un notify
+                    // a la otra convar y seteamos la IP del que recibimos.
+                    let (lock, cvar) = &*self.election_condvar;
+                    *lock.lock().unwrap() = Some(from.to_string());
+                    cvar.notify_all();
+                }
+                ELECTION => {
+                    self.socket
+                        .send_to(OK.to_string(), from.to_string())
+                        .unwrap();
+
+                    let (lock, cvar) = &*self.leader_down;
+                    *lock.lock().unwrap() = true;
+                    cvar.notify_all();
+                }
+                ACK_MSG => {
+                    let (lock, cv) = &*self.msg_ack_cv;
+                    *lock.lock().unwrap() = true;
+                    cv.notify_all();
                 }
                 msg => {
-                    println!("Received {}", msg);
+                    let record = self.create_record(msg, from);
+                    let mut block = Block::new(self.blockchain.get_last_block_hash());
+                    block.add_record(record);
+                    if let Err(err) = self.blockchain.append_block(block) {
+                        println!("Error: {}", err);
+                    }
+                    if self.i_am_leader() {
+                        self.socket
+                            .send_to(ACK_MSG.to_string(), from.to_string())
+                            .unwrap();
+                        // Si el mensaje viene del leader, lo propago a todos
+                        for node in &*self.other_nodes {
+                            self.socket.send_to(msg.to_string(), node.clone()).unwrap();
+                        }
+                    }
+                    println!("{}", self.blockchain);
                 }
             }
         }
-
-        println!("Desconectando...");
-        
     }
 
-    fn discover_leader(&self) -> () {
-        for node in &*self.other_nodes
-        {
-            self.socket.send_to(&encode_to_bytes(WHO_IS_LEADER), node).unwrap();
-        }
+    fn send_blockchain(&mut self, from: String) {
+        self.socket
+            .send_to(BLOCKCHAIN.to_string(), from.clone())
+            .unwrap();
+        for b in self.blockchain.get_blocks() {
+            let mut data_to_send = String::new();
+            match &b.records[0].record {
+                RecordData::CreateStudent(id, qualification) => {
+                    data_to_send.push_str(
+                        &(format!(
+                            "{},{},{},{}",
+                            &id,
+                            &(qualification.to_string()),
+                            &b.records[0].created_at.as_millis().to_string(),
+                            &b.records[0].from
+                        )),
+                    );
+                }
+            };
 
+            self.socket
+                .send_to(data_to_send, from.clone().to_string())
+                .unwrap();
+        }
+        self.socket.send_to(END.to_string(), from).unwrap();
+    }
+
+    fn recv_blockchain(&mut self) -> Blockchain {
+        let mut blockchain = Blockchain::new();
+        loop {
+            let (_, from, msg) = self.socket.recv_from();
+            if msg == END {
+                break;
+            }
+            let mut block = Block::new(blockchain.get_last_block_hash());
+            block.add_record(self.read_record(msg, from));
+            if let Err(err) = blockchain.append_block(block) {
+                println!("{}", err);
+            }
+        }
+        blockchain
+    }
+
+    fn discover_leader(&mut self) -> () {
         let mut leader_discoverer = LeaderDiscoverer::new(
             self.leader_condvar.clone(),
             self.leader_addr.clone(),
             self.my_address.clone(),
-            self.socket.try_clone().expect("Error cloning socket"),
-            self.other_nodes.clone()
+            self.socket.try_clone(),
+            self.other_nodes.clone(),
         );
-        
+
         thread::spawn(move || {
             leader_discoverer.run();
         });
     }
-    
-    fn i_know_the_leader(&self) -> bool {
+
+    fn detect_if_leader_is_down(&mut self) -> () {
+
+        let mut leader_down_handler = LeaderDownHandler::new(
+            self.my_address.clone(),
+            self.socket.try_clone(),
+            self.election_condvar.clone(),
+            self.leader_down.clone(),
+            self.running_bully.clone());
+
+        thread::spawn(move || {
+            leader_down_handler.run();
+        });
+    }
+
+    fn i_know_the_leader(&mut self) -> bool {
         if let Ok(leader_addr_mut) = self.leader_addr.read() {
             return !leader_addr_mut.is_none();
         }
-        else{
-            println!("Leader is being changed");
-            return false;
-        }
+        false
     }
 
-    fn read_from(&self) -> (String, SocketAddr) {
-        let mut buf = [0; 128];
-        let (_, from) = self.socket.recv_from(&mut buf).unwrap();
-        let msg = decode_from_bytes(buf.to_vec());
-        (msg, from)
-    }
-
-    fn i_am_leader(&self) -> bool {
+    fn i_am_leader(&mut self) -> bool {
         if let Ok(leader_addr_mut) = self.leader_addr.read() {
-            if *leader_addr_mut == None 
-            {
+            if *leader_addr_mut == None {
                 return false;
             }
             return *self.my_address.read().unwrap() == *leader_addr_mut.clone().unwrap();
-        }
-        else {
-            println!("Leader is being changed");
-            return false;
+        } else {
+            // FIXME
+            panic!("Not implemented");
         }
     }
 
-    fn leader_found(&self, leader: SocketAddr) -> () {
-
+    fn handle_coordinator_msg(&mut self, leader: SocketAddr) -> () {
         let (lock, cvar) = &*self.leader_condvar;
         let mut leader_found = lock.lock().unwrap();
         *leader_found = true;
@@ -177,25 +287,18 @@ impl Node {
             *leader_addr_mut = Some(leader.to_string());
         }
         let mut leader_addr = (*self.leader_addr.read().unwrap()).clone();
-        println!("La direccion del leader es: {}", leader_addr.get_or_insert("No address".to_string()));
-    }
 
-    fn check_if_i_am_leader(&self, node_that_asked: String) -> () {
-        println!("Checking if I'm leader");
-        if self.i_am_leader()
-        {
-            println!("Sending to {} that I am leader", node_that_asked.to_string());
-            self.socket.send_to(&encode_to_bytes(I_AM_LEADER), node_that_asked).unwrap();
-        }        
-        else {
-            println!("I am not leader");
-        }
-    }
+        println!(
+            "New leader found in address: {}",
+            leader_addr.get_or_insert("??".to_string())
+        );
 
+        let (lock, _) = &*self.leader_down;
+        *lock.lock().unwrap() = false;
+        *self.running_bully.lock().unwrap() = false;
+    }
 
     // TODO: Cambiar esto para tener un thread 
-
-
     // Esto bloquea el thread de recepción de mensajes => deberia ir en otro thread
     fn node_attempting_to_acquire_mutex(&mut self, node: SocketAddr, 
                                         mutex: Arc<Semaphore>, node_id_with_mutex: Arc<RwLock<Option<SocketAddr>>>) {
@@ -226,5 +329,42 @@ impl Node {
             *node_id = None;
         }
         println!("{} released mutex", node.to_string());
+    }
+
+    fn check_if_i_am_leader(&mut self, node_that_asked: String) -> () {
+        if self.i_am_leader() {
+            self.socket
+                .send_to(COORDINATOR.to_string(), node_that_asked.clone())
+                .unwrap();
+            self.send_blockchain(node_that_asked.clone());
+        }
+    }
+
+    fn read_record(&self, msg: String, from: SocketAddr) -> Record {
+        let student_data: Vec<&str> = msg.split(",").collect();
+        let record = Record::new(
+            from.to_string().into(),
+            RecordData::CreateStudent(
+                student_data[0].into(),
+                student_data[1].parse::<u32>().unwrap(),
+            ),
+            Duration::from_millis(student_data[2].parse::<u64>().unwrap()),
+        );
+        record
+    }
+
+    fn create_record(&self, msg: &str, from: SocketAddr) -> Record {
+        let student_data: Vec<&str> = msg.split(",").collect();
+        let record = Record::new(
+            from.to_string().into(),
+            RecordData::CreateStudent(
+                student_data[0].into(),
+                student_data[1].parse::<u32>().unwrap(),
+            ),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap(),
+        );
+        record
     }
 }
