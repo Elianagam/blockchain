@@ -118,26 +118,31 @@ impl Node {
                     cv.notify_all();
                 }
                 msg => {
-                    let record = self.create_record(msg, from);
-                    let mut block = Block::new(self.blockchain.get_last_block_hash());
-                    block.add_record(record);
-                    if let Err(err) = self.blockchain.append_block(block) {
-                        println!("Error: {}", err);
-                    }
-                    if self.i_am_leader() {
-                        self.socket
-                            .send_to(ACK_MSG.to_string(), from.to_string())
-                            .unwrap();
-                        // Si el mensaje viene del leader, lo propago a todos
-                        for node in &*self.other_nodes {
-                            self.socket.send_to(msg.to_string(), node.clone()).unwrap();
-                        }
-                    }
-                    println!("{}", self.blockchain);
+                    self.handle_msg(msg, from);
                 }
             }
         }
     }
+
+    fn handle_msg(&mut self, msg: &str, from: SocketAddr) {
+        let record = self.create_record(msg, from);
+        let mut block = Block::new(self.blockchain.get_last_block_hash());
+        block.add_record(record);
+        if let Err(err) = self.blockchain.append_block(block) {
+            println!("Error: {}", err);
+        }
+        if self.i_am_leader() {
+            self.socket
+                .send_to(ACK_MSG.to_string(), from.to_string())
+                .unwrap();
+            // Si el mensaje viene del leader, lo propago a todos
+            for node in &*self.other_nodes {
+                self.socket.send_to(msg.to_string(), node.clone()).unwrap();
+            }
+        }
+        println!("{}", self.blockchain);
+    }
+
 
     fn stdin_reader(&mut self) {
         let mut reader = StdinReader::new(
