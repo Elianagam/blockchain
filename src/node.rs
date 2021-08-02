@@ -140,22 +140,16 @@ impl Node {
     }
 
     fn stdin_reader(&mut self) {
-        let clone_socket = self.socket.try_clone();
-        let leader_addr_clone = self.leader_addr.clone();
-        let alive_clone = self.alive.clone();
-        let cv_clone = self.leader_condvar.clone();
-        let msg_ack_cv_clone = self.msg_ack_cv.clone();
-        let leader_down_cv = self.leader_down.clone();
+        let mut reader = StdinReader::new(
+            self.leader_condvar.clone(),
+            self.socket.try_clone(),
+            self.leader_addr.clone(),
+            self.alive.clone(),
+            self.msg_ack_cv.clone(),
+            self.leader_down.clone(),
+        );
 
         thread::spawn(move || {
-            let mut reader = StdinReader::new(
-                cv_clone,
-                clone_socket,
-                leader_addr_clone,
-                alive_clone,
-                msg_ack_cv_clone,
-                leader_down_cv,
-            );
             reader.run();
         });
     }
