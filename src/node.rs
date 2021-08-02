@@ -13,7 +13,6 @@ use std::thread;
 use std::time::{Duration, SystemTime};
 
 const MAX_NODES: u32 = 50;
-const ELECTION_TIMEOUT_SECS: u64 = 1;
 
 pub struct Node {
     pub my_address: Arc<RwLock<String>>,
@@ -79,7 +78,6 @@ impl Node {
         println!("Running node on: {} ", self.socket.local_addr().to_string());
 
         self.discover_leader();
-
         self.detect_if_leader_is_down();
 
         let clone_socket = self.socket.try_clone();
@@ -91,19 +89,8 @@ impl Node {
         let leader_down_cv = self.leader_down.clone();
 
         thread::spawn(move || {
-            let (lock, cv) = &*cv_clone;
-
-            //TODO. esta logica habria que moverla dentro del stdinreader
-            // cuando esta en el loop principal/
-            {
-                let mut leader_found = lock.lock().unwrap();
-
-                while !*leader_found {
-                    leader_found = cv.wait(leader_found).unwrap();
-                }
-            }
-
             let mut reader = StdinReader::new(
+                cv_clone,
                 clone_socket,
                 leader_addr_clone,
                 alive_clone,
