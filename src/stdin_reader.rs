@@ -17,7 +17,7 @@ pub struct StdinReader {
     node_alive: Arc<RwLock<bool>>,
     msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,
     leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
-    blockchain: Arc<Blockchain>
+    blockchain: Arc<RwLock<Blockchain>>
 }
 
 impl StdinReader {
@@ -28,7 +28,7 @@ impl StdinReader {
         node_alive: Arc<RwLock<bool>>,
         msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,
         leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
-    blockchain: Arc<Blockchain>
+        blockchain: Arc<RwLock<Blockchain>>
 
     ) -> Self {
         StdinReader {

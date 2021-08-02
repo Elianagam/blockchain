@@ -19,7 +19,7 @@ pub struct Node {
     pub socket: SocketWithTimeout,
     pub other_nodes: Arc<Vec<String>>,
     pub leader_addr: Arc<RwLock<Option<String>>>,
-    pub blockchain: Arc<Blockchain>,
+    pub blockchain: Arc<RwLock<Blockchain>>,
     pub leader_condvar: Arc<(Mutex<bool>, Condvar)>,
     pub election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
 
@@ -63,7 +63,7 @@ impl Node {
             my_address: Arc::new(RwLock::new(my_address.clone())),
             socket: SocketWithTimeout::new(socket),
             leader_addr: Arc::new(RwLock::new(None)),
-            blockchain: Arc::new(Blockchain::new()),
+            blockchain: Arc::new(RwLock::new(Blockchain::new())),
             leader_condvar: Arc::new((Mutex::new(false), Condvar::new())),
             election_condvar: Arc::new((Mutex::new(None), Condvar::new())),
             alive: Arc::new(RwLock::new(true)),
@@ -93,7 +93,9 @@ impl Node {
                     self.handle_coordinator_msg(from);
                 }
                 BLOCKCHAIN => {
-                    self.blockchain = Arc::new(self.recv_blockchain());
+                    if let Ok(mut blockchain_mut) = self.blockchain.write() {
+                        *blockchain_mut = self.recv_blockchain();
+                    }
                 }
                 OK => {
                     // Basicamente cada vez que recibamos un mensaje le hacemos un notify
@@ -125,12 +127,18 @@ impl Node {
 
     fn handle_msg(&mut self, msg: &str, from: SocketAddr) {
         let record = self.create_record(msg, from);
-        let mut block = Block::new(self.blockchain.get_last_block_hash());
+        let mut block;
+        if let Ok(mut blockchain_mut) = self.blockchain.read() {
+            block = Block::new(blockchain_mut.get_last_block_hash());
+        }
         block.add_record(record);
-        /*let _ = match self.blockchain.unwrap().append_block(block) {
-            Err(err) => println!("Error: {}", err),
-            Ok(_) => {}
-        };*/
+        
+        //let blockchain = self.blockchain.clone();
+        
+        if let Ok(mut blockchain_mut) = self.blockchain.write() {
+            blockchain_mut.append_block(block);
+        }
+
         if self.i_am_leader() {
             self.socket
                 .send_to(ACK_MSG.to_string(), from.to_string())
@@ -239,26 +247,29 @@ impl Node {
         self.socket
             .send_to(BLOCKCHAIN.to_string(), from.clone())
             .unwrap();
-        for b in self.blockchain.get_blocks() {
-            let mut data_to_send = String::new();
-            match &b.records[0].record {
-                RecordData::CreateStudent(id, qualification) => {
-                    data_to_send.push_str(
-                        &(format!(
-                            "{},{},{},{}",
-                            &id,
-                            &(qualification.to_string()),
-                            &b.records[0].created_at.as_millis().to_string(),
-                            &b.records[0].from
-                        )),
-                    );
-                }
-            };
 
-            self.socket
-                .send_to(data_to_send, from.clone().to_string())
-                .unwrap();
+        if let Ok(mut blockchain_mut) = self.blockchain.read() {
+            for b in blockchain_mut.get_blocks() {
+                let mut data_to_send = String::new();
+                match &b.records[0].record {
+                    RecordData::CreateStudent(id, qualification) => {
+                        data_to_send.push_str(
+                            &(format!(
+                                "{},{},{},{}",
+                                &id,
+                                &(qualification.to_string()),
+                                &b.records[0].created_at.as_millis().to_string(),
+                                &b.records[0].from
+                            )),
+                        );
+                    }
+                };
+                self.socket
+                    .send_to(data_to_send, from.clone().to_string())
+                    .unwrap();
+            }
         }
+        
         self.socket.send_to(END.to_string(), from).unwrap();
     }
 
