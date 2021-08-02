@@ -8,7 +8,7 @@ use crate::utils::messages::CLOSE;
 use crate::utils::socket_with_timeout::SocketWithTimeout;
 
 const ACK_TIMEOUT_SECS: u64 = 2;
-const WAITING_FOR_LOCK_ACQUIRED_TIMEOUT: u64 = 10;
+const WAITING_FOR_LOCK_ACQUIRED_TIMEOUT: u64 = 60;
 
 pub struct StdinReader {
     leader_condvar: Arc<(Mutex<bool>, Condvar)>,
@@ -84,15 +84,16 @@ impl StdinReader {
             let (lock, cvar) = &*self.lock_acquired;
 
             // Asumimos que no hay congestion mas de WAITING_FOR_LOCK_ACQUIRED_TIMEOUT
-            let timeout = Duration::from_secs(WAITING_FOR_LOCK_ACQUIRED_TIMEOUT);
             {
                 let lock_acquired = lock.lock().unwrap();
+                let timeout = Duration::from_secs(WAITING_FOR_LOCK_ACQUIRED_TIMEOUT);
                 let result = cvar
                     .wait_timeout_while(lock_acquired, timeout, |&mut lock_acquired| !lock_acquired)
                     .unwrap();
 
                 if result.1.timed_out() {
                     // TODO: Wait for new leader and do this all over again
+                    panic!("Acquired timeout!");
                 }
             }
 

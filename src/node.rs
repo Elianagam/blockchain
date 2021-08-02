@@ -14,6 +14,7 @@ use std::time::{Duration, SystemTime};
 use std_semaphore::Semaphore;
 
 const MAX_NODES: u32 = 50;
+const MUTEX_HOLD_TIMEOUT_SECS: u64 = 30;
 
 pub struct Node {
     pub my_address: Arc<RwLock<String>>,
@@ -24,10 +25,12 @@ pub struct Node {
     pub leader_condvar: Arc<(Mutex<bool>, Condvar)>,
     pub lock_acquired: Arc<(Mutex<bool>, Condvar)>,
     pub mutex: Arc<Semaphore>,
-    pub pending_acquires: Vec<String>,
     pub node_id_with_mutex: Arc<RwLock<Option<SocketAddr>>>,
     pub election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
-    pub not_realeased_nodes: Arc<RwLock<i32>>,
+
+    // Cantidad de nodos que tomaron el mutex pero que no lo liberaron
+    // debería ser en el peor de los casos 1 (si no hacemos un panic).
+    pub not_released_nodes: Arc<RwLock<i32>>,
 
     // El nodo esta vivo (no se hizo `close`)
     pub alive: Arc<RwLock<bool>>,
@@ -73,11 +76,10 @@ impl Node {
             leader_condvar: Arc::new((Mutex::new(false), Condvar::new())),
             lock_acquired: Arc::new((Mutex::new(false), Condvar::new())),
             mutex: Arc::new(Semaphore::new(1)),
-            pending_acquires: vec![],
             node_id_with_mutex: Arc::new(RwLock::new(None)),
             election_condvar: Arc::new((Mutex::new(None), Condvar::new())),
             alive: Arc::new(RwLock::new(true)),
-            not_realeased_nodes: Arc::new(RwLock::new(0)),
+            not_released_nodes: Arc::new(RwLock::new(0)),
             msg_ack_cv: Arc::new((Mutex::new(false), Condvar::new())),
             leader_down: Arc::new((Mutex::new(false), Condvar::new())),
             running_bully: Arc::new(Mutex::new(false)),
@@ -112,22 +114,18 @@ impl Node {
                     }
                 }
                 ACQUIRE_MSG => {
-                    if self.i_am_leader() {
-                        let node_id_with_mutex_clone = self.node_id_with_mutex.clone();
-                        self.node_attempting_to_acquire_mutex(
-                            from,
-                            self.mutex.clone(),
-                            node_id_with_mutex_clone,
-                        );
-                    }
+                    let node_id_with_mutex_clone = self.node_id_with_mutex.clone();
+                    self.handle_acquire_msg(
+                        from,
+                        self.mutex.clone(),
+                        node_id_with_mutex_clone,
+                    );
                 }
                 RELEASE_MSG => {
-                    if self.i_am_leader() {
-                        self.node_releasing_mutex(from);
-                    }
+                    self.handle_release_msg(from);
                 }
                 LOCK_ACQUIRED => {
-                    self.lock_acquired();
+                    self.handle_lock_acquired();
                 }
                 OK => {
                     // Basicamente cada vez que recibamos un mensaje le hacemos un notify
@@ -239,7 +237,8 @@ impl Node {
         }
     }
 
-    fn lock_acquired(&self) -> () {
+    fn handle_lock_acquired(&self) -> () {
+        println!("LOCK AQUIRED!");
         let (lock, cvar) = &*self.lock_acquired;
         let mut lock_acquired = lock.lock().unwrap();
         *lock_acquired = true;
@@ -267,26 +266,20 @@ impl Node {
         *self.running_bully.lock().unwrap() = false;
     }
 
-    // TODO: Cambiar esto para tener un thread
-    // Esto bloquea el thread de recepción de mensajes => deberia ir en otro thread
-    fn node_attempting_to_acquire_mutex(
+    fn handle_acquire_msg(
         &mut self,
         node: SocketAddr,
         mutex: Arc<Semaphore>,
         node_id_with_mutex: Arc<RwLock<Option<SocketAddr>>>,
     ) {
-        if node.to_string() == *self.my_address.read().unwrap() {
-            return;
-        }
-        println!("Received acquire form: {}", node);
-        //self.pending_acquires.push(node.to_string());
-        println!("{} waiting for mutex to be released", node);
         let mut socket_clone = self.socket.try_clone();
-        let not_released_nodes_clone = self.not_realeased_nodes.clone();
+        let not_released_nodes_clone = self.not_released_nodes.clone();
+
         thread::spawn(move || {
             mutex.acquire();
-            if let Ok(mut not_realeased_nodes) = not_released_nodes_clone.write() {
-                *not_realeased_nodes = *not_realeased_nodes + 1;
+
+            if let Ok(mut not_released_nodes) = not_released_nodes_clone.write() {
+                *not_released_nodes = *not_released_nodes + 1;
             }
 
             if let Ok(mut node_id) = node_id_with_mutex.write() {
@@ -295,45 +288,40 @@ impl Node {
             socket_clone
                 .send_to(LOCK_ACQUIRED.to_string(), node.to_string())
                 .unwrap();
-            println!("Mutex acquired by {}", node.to_string());
+
 
             // Si paso un timeout sin recibir RELEASE, hago un release
-            thread::sleep(Duration::from_secs(20));
+            thread::sleep(Duration::from_secs(MUTEX_HOLD_TIMEOUT_SECS));
 
-            if let Ok(mut not_realeased_nodes) = not_released_nodes_clone.write() {
-                if *not_realeased_nodes == 1 {
+            if let Ok(mut not_released_nodes) = not_released_nodes_clone.write() {
+                if *not_released_nodes > 1 { panic!("not_released_nodes > 1") }
+
+                if *not_released_nodes == 1 {
                     mutex.release();
-                    *not_realeased_nodes = 0;
+                    *not_released_nodes = 0;
                     println!(
                         "Mutex released because node {} was disconnected",
                         node.to_string()
                     );
-                } else if *not_realeased_nodes > 1 {
-                    panic!("not_released_nodes > 1")
                 }
             }
         });
     }
 
-    fn node_releasing_mutex(&mut self, node: SocketAddr) {
-        if node.to_string() == *self.my_address.read().unwrap() {
-            return;
-        }
+    fn handle_release_msg(&mut self, node: SocketAddr) {
         // Only if the node that had the mutex sent the release
         if node != (*self.node_id_with_mutex.read().unwrap()).unwrap() {
             return;
         }
-        let not_released_nodes_clone = self.not_realeased_nodes.clone();
-        if let Ok(mut not_realeased_nodes) = not_released_nodes_clone.write() {
-            if *not_realeased_nodes == 1 {
+
+        if let Ok(mut not_released_nodes) = self.not_released_nodes.write() {
+            if *not_released_nodes == 1 {
                 self.mutex.release();
-                *not_realeased_nodes = 0;
-            } else if *not_realeased_nodes > 1 {
+                *not_released_nodes = 0;
+            } else if *not_released_nodes > 1 {
                 panic!("not_released_nodes > 1")
             }
         }
-
-        // self.mutex.release();
 
         if let Ok(mut node_id) = self.node_id_with_mutex.write() {
             *node_id = None;
