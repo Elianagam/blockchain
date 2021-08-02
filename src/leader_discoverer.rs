@@ -48,6 +48,7 @@ impl LeaderDiscoverer {
         let (lock, cvar) = &*self.condvar;
         let mut leader_found = lock.lock().unwrap();
 
+        // TODO: Review this: wait_timeout_while?
         loop {
             let result = cvar
                 .wait_timeout(leader_found, Duration::from_millis(1000))

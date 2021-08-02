@@ -12,3 +12,4 @@ pub const ACK_MSG: &str = "ack";
 pub const ELECTION: &str = "election";
 pub const COORDINATOR: &str = "coordinator";
 pub const OK: &str = "ok";
+pub const LOCK_ACQUIRED: &str = "lock_acquired";
