@@ -52,15 +52,15 @@ impl StdinReader {
     }
 
     pub fn run(&mut self) {
-        loop {
-            let (lock, cv) = &*self.leader_condvar;
-            {
-                let mut leader_found = lock.lock().unwrap();
-                while !*leader_found {
-                    leader_found = cv.wait(leader_found).unwrap();
-                }
-            }
+        let (lock, cv) = &*self.leader_condvar;
 
+        {
+            let mut leader_found = lock.lock().unwrap();
+            while !*leader_found {
+                leader_found = cv.wait(leader_found).unwrap();
+            }
+        }
+        loop {
             let value = self.read_stdin();
             if &value == CLOSE {
                 let mut guard = self.node_alive.write().unwrap();
