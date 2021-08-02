@@ -1,6 +1,6 @@
-use crate::encoder::encode_to_bytes;
 use crate::utils::messages::*;
-use std::net::UdpSocket;
+use crate::utils::socket_with_timeout::SocketWithTimeout;
+
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time;
 use std::time::Duration;
@@ -11,7 +11,7 @@ pub struct LeaderDiscoverer {
     pub condvar: Arc<(Mutex<bool>, Condvar)>,
     pub leader_addr: Arc<RwLock<Option<String>>>,
     pub my_address: Arc<RwLock<String>>,
-    pub socket: UdpSocket,
+    pub socket: SocketWithTimeout,
     pub other_nodes: Arc<Vec<String>>,
 }
 
@@ -20,7 +20,7 @@ impl LeaderDiscoverer {
         condvar: Arc<(Mutex<bool>, Condvar)>,
         leader_addr: Arc<RwLock<Option<String>>>,
         my_address: Arc<RwLock<String>>,
-        socket: UdpSocket,
+        socket: SocketWithTimeout,
         other_nodes: Arc<Vec<String>>,
     ) -> Self {
         LeaderDiscoverer {
@@ -39,11 +39,10 @@ impl LeaderDiscoverer {
     pub fn run(&mut self) -> () {
         for node in &*self.other_nodes {
             self.socket
-                .send_to(&encode_to_bytes(WHO_IS_LEADER), node)
+                .send_to(WHO_IS_LEADER.to_string(), node.clone())
                 .unwrap();
         }
 
-        println!("Waiting for leader");
         let time = time::Instant::now();
 
         let (lock, cvar) = &*self.condvar;
@@ -53,21 +52,18 @@ impl LeaderDiscoverer {
             let result = cvar
                 .wait_timeout(leader_found, Duration::from_millis(1000))
                 .unwrap();
-            println!("searching leader");
             let now = time::Instant::now();
             leader_found = result.0;
             if *leader_found == true {
-                println!("Leader found");
                 break;
             } else if now.duration_since(time).as_secs() >= LEADER_DISCOVER_TIMEOUT_SECS {
                 println!("TIMEOUT: Leader not found, I become leader");
                 if let Ok(mut leader_addr_mut) = self.leader_addr.write() {
-                    println!("Setting leader addr to mine");
                     *leader_addr_mut = Some((*self.my_address.read().unwrap()).clone());
 
                     for node in &*self.other_nodes {
                         self.socket
-                            .send_to(&encode_to_bytes(I_AM_LEADER), node)
+                            .send_to(COORDINATOR.to_string(), node.clone())
                             .unwrap();
                     }
                 }
