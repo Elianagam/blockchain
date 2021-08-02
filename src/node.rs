@@ -13,7 +13,6 @@ use std::thread;
 use std::time::{Duration, SystemTime};
 
 const MAX_NODES: u32 = 50;
-const ELECTION_TIMEOUT_SECS: u64 = 1;
 
 pub struct Node {
     pub my_address: Arc<RwLock<String>>,
@@ -79,39 +78,8 @@ impl Node {
         println!("Running node on: {} ", self.socket.local_addr().to_string());
 
         self.discover_leader();
-
         self.detect_if_leader_is_down();
-
-        let clone_socket = self.socket.try_clone();
-        let leader_addr_clone = self.leader_addr.clone();
-        let alive_clone = self.alive.clone();
-
-        let cv_clone = self.leader_condvar.clone();
-        let msg_ack_cv_clone = self.msg_ack_cv.clone();
-        let leader_down_cv = self.leader_down.clone();
-
-        thread::spawn(move || {
-            let (lock, cv) = &*cv_clone;
-
-            //TODO. esta logica habria que moverla dentro del stdinreader
-            // cuando esta en el loop principal/
-            {
-                let mut leader_found = lock.lock().unwrap();
-
-                while !*leader_found {
-                    leader_found = cv.wait(leader_found).unwrap();
-                }
-            }
-
-            let mut reader = StdinReader::new(
-                clone_socket,
-                leader_addr_clone,
-                alive_clone,
-                msg_ack_cv_clone,
-                leader_down_cv,
-            );
-            reader.run();
-        });
+        self.stdin_reader();
 
         while *self.alive.read().unwrap() {
             let (_, from, msg) = self.socket.recv_from();
@@ -171,47 +139,19 @@ impl Node {
         }
     }
 
-    fn send_blockchain(&mut self, from: String) {
-        self.socket
-            .send_to(BLOCKCHAIN.to_string(), from.clone())
-            .unwrap();
-        for b in self.blockchain.get_blocks() {
-            let mut data_to_send = String::new();
-            match &b.records[0].record {
-                RecordData::CreateStudent(id, qualification) => {
-                    data_to_send.push_str(
-                        &(format!(
-                            "{},{},{},{}",
-                            &id,
-                            &(qualification.to_string()),
-                            &b.records[0].created_at.as_millis().to_string(),
-                            &b.records[0].from
-                        )),
-                    );
-                }
-            };
+    fn stdin_reader(&mut self) {
+        let mut reader = StdinReader::new(
+            self.leader_condvar.clone(),
+            self.socket.try_clone(),
+            self.leader_addr.clone(),
+            self.alive.clone(),
+            self.msg_ack_cv.clone(),
+            self.leader_down.clone(),
+        );
 
-            self.socket
-                .send_to(data_to_send, from.clone().to_string())
-                .unwrap();
-        }
-        self.socket.send_to(END.to_string(), from).unwrap();
-    }
-
-    fn recv_blockchain(&mut self) -> Blockchain {
-        let mut blockchain = Blockchain::new();
-        loop {
-            let (_, from, msg) = self.socket.recv_from();
-            if msg == END {
-                break;
-            }
-            let mut block = Block::new(blockchain.get_last_block_hash());
-            block.add_record(self.read_record(msg, from));
-            if let Err(err) = blockchain.append_block(block) {
-                println!("{}", err);
-            }
-        }
-        blockchain
+        thread::spawn(move || {
+            reader.run();
+        });
     }
 
     fn discover_leader(&mut self) -> () {
@@ -289,6 +229,49 @@ impl Node {
                 .unwrap();
             self.send_blockchain(node_that_asked.clone());
         }
+    }
+
+    fn send_blockchain(&mut self, from: String) {
+        self.socket
+            .send_to(BLOCKCHAIN.to_string(), from.clone())
+            .unwrap();
+        for b in self.blockchain.get_blocks() {
+            let mut data_to_send = String::new();
+            match &b.records[0].record {
+                RecordData::CreateStudent(id, qualification) => {
+                    data_to_send.push_str(
+                        &(format!(
+                            "{},{},{},{}",
+                            &id,
+                            &(qualification.to_string()),
+                            &b.records[0].created_at.as_millis().to_string(),
+                            &b.records[0].from
+                        )),
+                    );
+                }
+            };
+
+            self.socket
+                .send_to(data_to_send, from.clone().to_string())
+                .unwrap();
+        }
+        self.socket.send_to(END.to_string(), from).unwrap();
+    }
+
+    fn recv_blockchain(&mut self) -> Blockchain {
+        let mut blockchain = Blockchain::new();
+        loop {
+            let (_, from, msg) = self.socket.recv_from();
+            if msg == END {
+                break;
+            }
+            let mut block = Block::new(blockchain.get_last_block_hash());
+            block.add_record(self.read_record(msg, from));
+            if let Err(err) = blockchain.append_block(block) {
+                println!("{}", err);
+            }
+        }
+        blockchain
     }
 
     fn read_record(&self, msg: String, from: SocketAddr) -> Record {

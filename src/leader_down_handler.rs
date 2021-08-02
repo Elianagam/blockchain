@@ -5,6 +5,7 @@ use std::time::Duration;
 
 const MAX_NODES: u32 = 50;
 const ELECTION_TIMEOUT_SECS: u64 = 1;
+
 pub struct LeaderDownHandler {
     pub my_address: Arc<RwLock<String>>,
     pub socket: SocketWithTimeout,
