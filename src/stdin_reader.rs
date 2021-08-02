@@ -1,9 +1,8 @@
+use crate::utils::messages::*;
 use std::io::{self, BufRead};
 use std::option::Option;
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
-use crate::utils::messages::*;
-use std::thread;
 
 use crate::utils::messages::CLOSE;
 use crate::utils::socket_with_timeout::SocketWithTimeout;
@@ -29,7 +28,7 @@ impl StdinReader {
         node_alive: Arc<RwLock<bool>>,
         msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,
         leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
-        lock_acquired: Arc<(Mutex<bool>, Condvar)>
+        lock_acquired: Arc<(Mutex<bool>, Condvar)>,
     ) -> Self {
         StdinReader {
             leader_condvar,
@@ -38,7 +37,7 @@ impl StdinReader {
             node_alive,
             msg_ack_cv,
             leader_down_cv,
-            lock_acquired
+            lock_acquired,
         }
     }
 
@@ -78,7 +77,9 @@ impl StdinReader {
                 continue;
             }
 
-            self.socket.send_to(ACQUIRE_MSG.to_string(), addr.clone().unwrap()).unwrap();
+            self.socket
+                .send_to(ACQUIRE_MSG.to_string(), addr.clone().unwrap())
+                .unwrap();
 
             let (lock, cvar) = &*self.lock_acquired;
 
@@ -86,20 +87,19 @@ impl StdinReader {
             let timeout = Duration::from_secs(WAITING_FOR_LOCK_ACQUIRED_TIMEOUT);
             {
                 let lock_acquired = lock.lock().unwrap();
-                let result = cvar.wait_timeout_while(lock_acquired, timeout, 
-                    |&mut lock_acquired| !lock_acquired).unwrap();                
-            
+                let result = cvar
+                    .wait_timeout_while(lock_acquired, timeout, |&mut lock_acquired| !lock_acquired)
+                    .unwrap();
+
                 if result.1.timed_out() {
                     // TODO: Wait for new leader and do this all over again
                 }
             }
 
-            println!("Lock acquired");
-
             self.socket.send_to(value, addr.clone().unwrap()).unwrap();
-            self.socket.send_to(RELEASE_MSG.to_string(), addr.clone().unwrap()).unwrap();
-
-            println!("Lock released");
+            self.socket
+                .send_to(RELEASE_MSG.to_string(), addr.clone().unwrap())
+                .unwrap();
 
             self.handler_ack();
         }
