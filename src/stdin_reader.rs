@@ -3,7 +3,7 @@ use std::option::Option;
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
 
-use crate::utils::messages::CLOSE;
+use crate::utils::messages::{CLOSE, SHOW_BLOCKCHAIN};
 use crate::utils::socket_with_timeout::SocketWithTimeout;
 
 const ACK_TIMEOUT_SECS: u64 = 2;
@@ -36,17 +36,40 @@ impl StdinReader {
         }
     }
 
-    fn read_stdin(&mut self) -> String {
-        println!("Write a student note:");
+    fn menu(&self) {
+        println!("Select an option:\n\t1. Add block\n\t2. Print Blockchain\n\t3. Exit");
+    }
+
+    fn read(&self) -> String {
         let stdin = io::stdin();
         let mut iterator = stdin.lock().lines();
         let line = iterator.next().unwrap().unwrap();
+        line
+    }
 
+    fn option_add_block(&mut self) -> String {
+        println!("Write a block (padron,note): ");
+        let line = self.read();
         let student_data: Vec<&str> = line.split(",").collect();
         if (student_data.len() == 1 && (student_data[0] == CLOSE)) || student_data.len() == 2 {
             return line.to_string();
         } else {
             println!("Unsupported data format, usage: id, qualification")
+        }
+        return String::new();
+    }
+
+    fn read_stdin(&mut self) -> String {
+        self.menu();
+        let option = self.read();
+
+        match option.as_str() {
+            "1" => { return self.option_add_block(); }
+            "2" => { return SHOW_BLOCKCHAIN.to_string(); }
+            "3" => { return CLOSE.to_string() }
+            _ => {
+                println!("Invalid option, choose again...")
+            }
         }
         return String::new();
     }
@@ -62,6 +85,7 @@ impl StdinReader {
         }
         loop {
             let value = self.read_stdin();
+            if &value == "" { continue; } 
             if &value == CLOSE {
                 let mut guard = self.node_alive.write().unwrap();
                 *guard = false;
@@ -73,7 +97,6 @@ impl StdinReader {
             }
 
             self.socket.send_to(value, addr.unwrap()).unwrap();
-
             self.handler_ack();
         }
     }

@@ -105,7 +105,8 @@ impl LeaderDownHandler {
 
         for n_addr in self.build_addr_list() {
             if self.get_port_from_addr((*self.my_address.read().unwrap()).clone())
-                < self.get_port_from_addr(n_addr.clone()) {
+                < self.get_port_from_addr(n_addr.clone())
+            {
                 upper_nodes.push(n_addr);
             }
         }

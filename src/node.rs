@@ -92,9 +92,11 @@ impl Node {
                 COORDINATOR => {
                     self.handle_coordinator_msg(from);
                 }
+                SHOW_BLOCKCHAIN => {
+                    self.handle_show_blockchain(from);
+                }
                 BLOCKCHAIN => {
                     self.blockchain = self.recv_blockchain();
-                    println!("{}", self.blockchain);
                 }
                 OK => {
                     // Basicamente cada vez que recibamos un mensaje le hacemos un notify
@@ -124,6 +126,20 @@ impl Node {
         }
     }
 
+    fn handle_show_blockchain(&mut self, from: SocketAddr) {
+        if self.i_am_leader() {
+            if format!("{}", from) != *self.my_address.read().unwrap() {
+                self.socket
+                    .send_to(SHOW_BLOCKCHAIN.to_string(), from.to_string())
+                    .unwrap();
+            } else {
+                println!("{}", self.blockchain);
+            }
+        } else {
+            println!("{}", self.blockchain);
+        }
+    }
+
     fn handle_msg(&mut self, msg: &str, from: SocketAddr) {
         let record = self.create_record(msg, from);
         let mut block = Block::new(self.blockchain.get_last_block_hash());
@@ -140,9 +156,7 @@ impl Node {
                 self.socket.send_to(msg.to_string(), node.clone()).unwrap();
             }
         }
-        println!("{}", self.blockchain);
     }
-
 
     fn stdin_reader(&mut self) {
         let mut reader = StdinReader::new(
