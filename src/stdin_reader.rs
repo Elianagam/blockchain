@@ -40,6 +40,26 @@ impl StdinReader {
         println!("Select an option:\n\t1. Add block\n\t2. Print Blockchain\n\t3. Exit");
     }
 
+    pub fn run(&mut self) {
+        self.leader_found();
+        loop {
+            let value = self.read_stdin();
+            if &value == "" { continue; } 
+            if &value == CLOSE {
+                let mut guard = self.node_alive.write().unwrap();
+                *guard = false;
+                break;
+            }
+            let addr = self.leader_addr.read().unwrap().clone();
+            if addr.is_none() {
+                continue;
+            }
+
+            self.socket.send_to(value, addr.unwrap()).unwrap();
+            self.handler_ack();
+        }
+    }
+
     fn read(&self) -> String {
         let stdin = io::stdin();
         let mut iterator = stdin.lock().lines();
@@ -48,15 +68,13 @@ impl StdinReader {
     }
 
     fn option_add_block(&mut self) -> String {
-        println!("Write a block (padron,note): ");
+        println!("Write a block (id,qualification): ");
         let line = self.read();
         let student_data: Vec<&str> = line.split(",").collect();
-        if (student_data.len() == 1 && (student_data[0] == CLOSE)) || student_data.len() == 2 {
-            return line.to_string();
-        } else {
+        if student_data.len() != 2 {
             println!("Unsupported data format, usage: id, qualification")
         }
-        return String::new();
+        return line.to_string();
     }
 
     fn read_stdin(&mut self) -> String {
@@ -74,7 +92,7 @@ impl StdinReader {
         return String::new();
     }
 
-    pub fn run(&mut self) {
+    fn leader_found(&self) {
         let (lock, cv) = &*self.leader_condvar;
 
         {
@@ -82,22 +100,6 @@ impl StdinReader {
             while !*leader_found {
                 leader_found = cv.wait(leader_found).unwrap();
             }
-        }
-        loop {
-            let value = self.read_stdin();
-            if &value == "" { continue; } 
-            if &value == CLOSE {
-                let mut guard = self.node_alive.write().unwrap();
-                *guard = false;
-                break;
-            }
-            let addr = self.leader_addr.read().unwrap().clone();
-            if addr.is_none() {
-                continue;
-            }
-
-            self.socket.send_to(value, addr.unwrap()).unwrap();
-            self.handler_ack();
         }
     }
 
