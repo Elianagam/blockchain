@@ -2,8 +2,10 @@ use std::io::{self, BufRead};
 use std::option::Option;
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
+use crate::blockchain::blockchain::Blockchain;
 
-use crate::utils::messages::{CLOSE, SHOW_BLOCKCHAIN};
+
+use crate::utils::messages::{CLOSE};
 use crate::utils::socket_with_timeout::SocketWithTimeout;
 
 const ACK_TIMEOUT_SECS: u64 = 2;
@@ -15,6 +17,7 @@ pub struct StdinReader {
     node_alive: Arc<RwLock<bool>>,
     msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,
     leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
+    blockchain: Arc<Blockchain>
 }
 
 impl StdinReader {
@@ -25,6 +28,8 @@ impl StdinReader {
         node_alive: Arc<RwLock<bool>>,
         msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,
         leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
+    blockchain: Arc<Blockchain>
+
     ) -> Self {
         StdinReader {
             leader_condvar,
@@ -33,6 +38,7 @@ impl StdinReader {
             node_alive,
             msg_ack_cv,
             leader_down_cv,
+            blockchain
         }
     }
 
@@ -83,7 +89,7 @@ impl StdinReader {
 
         match option.as_str() {
             "1" => { return self.option_add_block(); }
-            "2" => { return SHOW_BLOCKCHAIN.to_string(); }
+            "2" => { println!("{}", self.blockchain) }
             "3" => { return CLOSE.to_string() }
             _ => {
                 println!("Invalid option, choose again...")
@@ -95,11 +101,9 @@ impl StdinReader {
     fn leader_found(&self) {
         let (lock, cv) = &*self.leader_condvar;
 
-        {
-            let mut leader_found = lock.lock().unwrap();
-            while !*leader_found {
-                leader_found = cv.wait(leader_found).unwrap();
-            }
+        let mut leader_found = lock.lock().unwrap();
+        while !*leader_found {
+            leader_found = cv.wait(leader_found).unwrap();
         }
     }
 

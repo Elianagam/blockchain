@@ -19,7 +19,7 @@ pub struct Node {
     pub socket: SocketWithTimeout,
     pub other_nodes: Arc<Vec<String>>,
     pub leader_addr: Arc<RwLock<Option<String>>>,
-    pub blockchain: Blockchain,
+    pub blockchain: Arc<Blockchain>,
     pub leader_condvar: Arc<(Mutex<bool>, Condvar)>,
     pub election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
 
@@ -63,7 +63,7 @@ impl Node {
             my_address: Arc::new(RwLock::new(my_address.clone())),
             socket: SocketWithTimeout::new(socket),
             leader_addr: Arc::new(RwLock::new(None)),
-            blockchain: Blockchain::new(),
+            blockchain: Arc::new(Blockchain::new()),
             leader_condvar: Arc::new((Mutex::new(false), Condvar::new())),
             election_condvar: Arc::new((Mutex::new(None), Condvar::new())),
             alive: Arc::new(RwLock::new(true)),
@@ -92,11 +92,8 @@ impl Node {
                 COORDINATOR => {
                     self.handle_coordinator_msg(from);
                 }
-                SHOW_BLOCKCHAIN => {
-                    self.handle_show_blockchain(from);
-                }
                 BLOCKCHAIN => {
-                    self.blockchain = self.recv_blockchain();
+                    self.blockchain = Arc::new(self.recv_blockchain());
                 }
                 OK => {
                     // Basicamente cada vez que recibamos un mensaje le hacemos un notify
@@ -126,27 +123,14 @@ impl Node {
         }
     }
 
-    fn handle_show_blockchain(&mut self, from: SocketAddr) {
-        if self.i_am_leader() {
-            if format!("{}", from) != *self.my_address.read().unwrap() {
-                self.socket
-                    .send_to(SHOW_BLOCKCHAIN.to_string(), from.to_string())
-                    .unwrap();
-            } else {
-                println!("{}", self.blockchain);
-            }
-        } else {
-            println!("{}", self.blockchain);
-        }
-    }
-
     fn handle_msg(&mut self, msg: &str, from: SocketAddr) {
         let record = self.create_record(msg, from);
         let mut block = Block::new(self.blockchain.get_last_block_hash());
         block.add_record(record);
-        if let Err(err) = self.blockchain.append_block(block) {
-            println!("Error: {}", err);
-        }
+        /*let _ = match self.blockchain.unwrap().append_block(block) {
+            Err(err) => println!("Error: {}", err),
+            Ok(_) => {}
+        };*/
         if self.i_am_leader() {
             self.socket
                 .send_to(ACK_MSG.to_string(), from.to_string())
@@ -166,6 +150,7 @@ impl Node {
             self.alive.clone(),
             self.msg_ack_cv.clone(),
             self.leader_down.clone(),
+            self.blockchain.clone()
         );
 
         thread::spawn(move || {
