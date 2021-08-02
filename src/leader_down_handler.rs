@@ -1,7 +1,7 @@
-use std::sync::{Arc, Condvar, Mutex, RwLock};
-use crate::utils::socket_with_timeout::SocketWithTimeout;
-use std::time::{Duration};
 use crate::utils::messages::*;
+use crate::utils::socket_with_timeout::SocketWithTimeout;
+use std::sync::{Arc, Condvar, Mutex, RwLock};
+use std::time::Duration;
 
 const MAX_NODES: u32 = 50;
 const ELECTION_TIMEOUT_SECS: u64 = 1;
@@ -10,7 +10,7 @@ pub struct LeaderDownHandler {
     pub socket: SocketWithTimeout,
     pub election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
     pub leader_down: Arc<(Mutex<bool>, Condvar)>,
-    pub running_bully: Arc<Mutex<bool>>
+    pub running_bully: Arc<Mutex<bool>>,
 }
 
 impl LeaderDownHandler {
@@ -19,21 +19,21 @@ impl LeaderDownHandler {
         socket: SocketWithTimeout,
         election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
         leader_down: Arc<(Mutex<bool>, Condvar)>,
-        running_bully: Arc<Mutex<bool>>
+        running_bully: Arc<Mutex<bool>>,
     ) -> Self {
         LeaderDownHandler {
             my_address,
             socket,
             election_condvar,
             leader_down,
-            running_bully
+            running_bully,
         }
     }
 
     pub fn run(&mut self) -> () {
         loop {
             let (lock, cv) = &*self.leader_down;
-    
+
             {
                 let mut leader_down = lock.lock().unwrap();
                 // *guard: el lider murio
@@ -41,7 +41,7 @@ impl LeaderDownHandler {
                     leader_down = cv.wait(leader_down).unwrap();
                 }
             }
-    
+
             if !*self.running_bully.lock().unwrap() {
                 *self.running_bully.lock().unwrap() = true;
                 self.run_bully_algorithm();
@@ -50,7 +50,6 @@ impl LeaderDownHandler {
     }
 
     fn run_bully_algorithm(&mut self) {
-
         println!("<> Running bully algorithm. <>");
 
         for node in self.find_upper_sockets() {
@@ -76,7 +75,9 @@ impl LeaderDownHandler {
             addr_list.push((*self.my_address.read().unwrap()).clone());
 
             for n_addr in addr_list {
-                self.socket.send_to(COORDINATOR.to_string(), n_addr).unwrap();
+                self.socket
+                    .send_to(COORDINATOR.to_string(), n_addr)
+                    .unwrap();
             }
         }
     }
@@ -91,24 +92,22 @@ impl LeaderDownHandler {
         }
         addrs
     }
-    
+
     fn get_port_from_addr(&self, addr: String) -> u32 {
         addr.split(":").collect::<Vec<&str>>()[1]
             .parse::<u32>()
             .unwrap()
     }
-    
+
     fn find_upper_sockets(&self) -> Vec<String> {
         let mut upper_nodes = vec![];
-    
+
         for n_addr in self.build_addr_list() {
-            if self.get_port_from_addr((*self.my_address.read().unwrap()).clone()) 
+            if self.get_port_from_addr((*self.my_address.read().unwrap()).clone())
                 < self.get_port_from_addr(n_addr.clone()) {
                 upper_nodes.push(n_addr);
             }
         }
         upper_nodes
     }
-
-
 }

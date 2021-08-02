@@ -229,13 +229,13 @@ impl Node {
     }
 
     fn detect_if_leader_is_down(&mut self) -> () {
-
         let mut leader_down_handler = LeaderDownHandler::new(
             self.my_address.clone(),
             self.socket.try_clone(),
             self.election_condvar.clone(),
             self.leader_down.clone(),
-            self.running_bully.clone());
+            self.running_bully.clone(),
+        );
 
         thread::spawn(move || {
             leader_down_handler.run();
