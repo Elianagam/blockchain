@@ -139,7 +139,8 @@ impl StdinReader {
         let line = self.read();
         let student_data: Vec<&str> = line.split(",").collect();
         if student_data.len() != 2 {
-            println!("Unsupported data format, usage: id, qualification")
+            println!("Unsupported data format, usage: id, qualification");
+            return String::new();
         }
         return line.to_string();
     }
@@ -161,6 +162,7 @@ impl StdinReader {
         return String::new();
     }
 
+    /// Print blockchain in stdout if option 2 was choseen
     fn option_show_blockchain(&self) {
         let blockchain = self.blockchain.read().unwrap().clone();
         println!("{}", blockchain);
@@ -182,6 +184,7 @@ impl StdinReader {
         }
     }
 
+    /// Whait for leader ack msg to check if the leader is down
     fn wait_for_ack(&self) {
         let (lock, cv) = &*self.msg_ack_cv;
         let mut guard = lock.lock().unwrap();
