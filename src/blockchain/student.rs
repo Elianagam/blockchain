@@ -4,12 +4,12 @@
 #[derive(Clone, Debug)]
 pub struct Student {
     /// qualification
-    pub qualification: u32,
+    pub qualification: i32,
 }
 
 impl Student {
     /// Constructor
-    pub fn new(qualification: u32) -> Self {
+    pub fn new(qualification: i32) -> Self {
         Student { qualification }
     }
 }

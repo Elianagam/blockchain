@@ -13,7 +13,7 @@ pub trait WorldState {
     fn get_student_by_id(&self, id: &String) -> Option<&Student>;
 
     /// Adds a new student
-    fn create_student(&mut self, id: String, qualification: u32) -> Result<(), &'static str>;
+    fn create_student(&mut self, id: String, qualification: i32) -> Result<(), &'static str>;
 }
 
 impl WorldState for Blockchain {
@@ -29,7 +29,7 @@ impl WorldState for Blockchain {
         self.students.get(id)
     }
 
-    fn create_student(&mut self, id: String, qualification: u32) -> Result<(), &'static str> {
+    fn create_student(&mut self, id: String, qualification: i32) -> Result<(), &'static str> {
         if qualification >= 1 && qualification <= 10 {
             let acc = Student::new(qualification);
             self.students.insert(id, acc);

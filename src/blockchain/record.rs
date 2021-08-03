@@ -18,7 +18,7 @@ pub struct Record {
 /// The operation to be stored on the blockchain
 #[derive(Clone, Debug, PartialEq)]
 pub enum RecordData {
-    CreateStudent(String, u32)
+    CreateStudent(String, i32)
 }
 
 impl Record {

@@ -193,7 +193,7 @@ impl Node {
             let mut block = Block::new(blockchain_mut.get_last_block_hash());
             block.add_record(record);
             match blockchain_mut.append_block(block) {
-                Err(_) => println!("Error"),
+                Err(err) => println!("{}", err),
                 Ok(_) => {}
             };
         }
@@ -419,7 +419,7 @@ impl Node {
             from.to_string().into(),
             RecordData::CreateStudent(
                 student_data[0].into(),
-                student_data[1].parse::<u32>().unwrap(),
+                student_data[1].parse::<i32>().unwrap(),
             ),
             Duration::from_millis(student_data[2].parse::<u64>().unwrap()),
         );
@@ -433,7 +433,7 @@ impl Node {
             student_data[3].to_string(),
             RecordData::CreateStudent(
                 student_data[0].into(),
-                student_data[1].parse::<u32>().unwrap(),
+                student_data[1].parse::<i32>().unwrap(),
             ),
             Duration::from_millis(student_data[2].parse::<u64>().unwrap()),
         );
