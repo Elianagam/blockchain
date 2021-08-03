@@ -390,7 +390,7 @@ impl Node {
     fn create_record(&self, msg: &str, from: SocketAddr) -> Record {
         let student_data: Vec<&str> = msg.split(",").collect();
         let record = Record::new(
-            from.to_string().into(),
+            student_data[3].to_string(),
             RecordData::CreateStudent(
                 student_data[0].into(),
                 student_data[1].parse::<u32>().unwrap(),

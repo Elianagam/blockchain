@@ -100,9 +100,10 @@ impl StdinReader {
             let mut data_to_send = String::new();
             data_to_send.push_str(
                 &(format!(
-                    "{},{}",
+                    "{},{},{}",
                     &value,
                     &now,
+                    &self.socket.local_addr().to_string()
                 ))
             );
             // Nos dieron el lock
