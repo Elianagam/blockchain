@@ -33,7 +33,7 @@ fn main() {
             process::exit(-1);
         }
     };
-    println!("Logging messages will be saved to: {:?}.", args[1]);
+    println!("Logging messages will be saved to: log_{:?}.", args[1]);
 
     let blockchain_filename = format!("log_{}_blockchain", args[1]);
 
