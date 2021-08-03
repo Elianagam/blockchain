@@ -97,7 +97,7 @@ impl StdinReader {
                 if result.1.timed_out() {
                     // El lider no nos dió el lock en WAITING_FOR_LOCK_ACQUIRED_TIMEOUT
                     // puede estar caído o simplemente hay mucha congestión.
-                    println!("Operación fallida reintentar");
+                    println!("El lider se ha caido. Vuelva a reintentar si había agregado algo a la blockchain.");
                     self.set_leader_down();
                     continue;
                 }
