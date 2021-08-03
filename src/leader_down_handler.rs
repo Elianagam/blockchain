@@ -106,12 +106,14 @@ impl LeaderDownHandler {
         addrs
     }
 
+    /// Get port from addrs
     fn get_port_from_addr(&self, addr: String) -> u32 {
         addr.split(":").collect::<Vec<&str>>()[1]
             .parse::<u32>()
             .unwrap()
     }
 
+    /// Find port bigger that my addr port 
     fn find_upper_sockets(&self) -> Vec<String> {
         let mut upper_nodes = vec![];
 

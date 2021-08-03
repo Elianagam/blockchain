@@ -95,6 +95,9 @@ impl Node {
         }
     }
 
+    /// Run main node, 
+    /// spawn thread from leader discover, stdin reader and bully 
+    /// Handle msg reader from socket 
     pub fn run(&mut self) -> () {
         self.logger.info(format!("Running node on: {} ", 
                         self.socket.local_addr().to_string()));
@@ -182,7 +185,7 @@ impl Node {
     }
 
     /// Handler any msg from reading from stdin 
-    /// 
+    /// If Iam leader send ack msg to notify Iam up
     fn handle_msg(&mut self, msg: &str, from: SocketAddr) {
         let record = self.create_record(msg);
 
