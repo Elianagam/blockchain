@@ -6,7 +6,6 @@ use std::time::{Duration, SystemTime};
 
 use crate::blockchain::blockchain::Blockchain;
 use crate::utils::logger::Logger;
-use crate::utils::messages::*;
 use crate::utils::socket::Socket;
 
 const ACK_TIMEOUT_SECS: u64 = 2;

@@ -1,18 +1,18 @@
 use crate::blockchain::block::Block;
 use crate::blockchain::blockchain::Blockchain;
-use crate::blockchain::record::{Record, RecordData};
 use crate::leader_discoverer::LeaderDiscoverer;
 use crate::leader_down_handler::LeaderDownHandler;
 use crate::stdin_reader::StdinReader;
 use crate::utils::messages::*;
 use crate::utils::socket::Socket;
 use crate::utils::logger::Logger;
+use crate::blockchain::record::{Record, RecordData};
 
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
-use std::thread;
-use std::time::{Duration};
+use std::thread::{self, JoinHandle};
 use std_semaphore::Semaphore;
+use std::time::Duration;
 
 const MAX_NODES: u32 = 50;
 const MUTEX_HOLD_TIMEOUT_SECS: u64 = 30;
@@ -43,6 +43,8 @@ pub struct Node {
 
     pub leader_down: Arc<(Mutex<bool>, Condvar)>,
     pub running_bully: Arc<Mutex<bool>>,
+
+    pub running_threads: Vec<Option<JoinHandle<()>>>,
 }
 
 fn build_addr_list(skip_addr: &String) -> Vec<String> {
@@ -88,7 +90,8 @@ impl Node {
             running_bully: Arc::new(Mutex::new(false)),
             other_nodes,
             logger,
-            blockchain_logger
+            blockchain_logger,
+            running_threads: vec![],
         }
     }
 
@@ -116,6 +119,17 @@ impl Node {
                 NOOP_MSG => {},
                 msg => self.handle_msg(msg, from),
             }
+        }
+        self.finalize_running_threads();
+    }
+
+    fn finalize_running_threads(&mut self) {
+        let (_, cv) = &*self.leader_down;
+        cv.notify_all();
+
+        while self.running_threads.len() > 0 {
+            let mut t = self.running_threads.pop();
+            t.take().unwrap().take().unwrap().join().unwrap();
         }
     }
 
@@ -203,9 +217,9 @@ impl Node {
             self.blockchain_logger.clone()
         );
 
-        thread::spawn(move || {
+        self.running_threads.push(Some(thread::spawn(move || {
             reader.run();
-        });
+        })));
     }
 
     fn discover_leader(&mut self) -> () {
@@ -218,9 +232,9 @@ impl Node {
             self.logger.clone()
         );
 
-        thread::spawn(move || {
+        self.running_threads.push(Some(thread::spawn(move || {
             leader_discoverer.run();
-        });
+        })));
     }
 
     fn detect_if_leader_is_down(&mut self) -> () {
@@ -230,12 +244,13 @@ impl Node {
             self.election_condvar.clone(),
             self.leader_down.clone(),
             self.running_bully.clone(),
-            self.logger.clone()
+            self.logger.clone(),
+            self.alive.clone(),
         );
 
-        thread::spawn(move || {
+        self.running_threads.push(Some(thread::spawn(move || {
             leader_down_handler.run();
-        });
+        })));
     }
 
     fn i_know_the_leader(&mut self) -> bool {
@@ -289,9 +304,9 @@ impl Node {
     ) {
         let mut socket_clone = self.socket.try_clone();
         let not_released_nodes_clone = self.not_released_nodes.clone();
-
         let logger_clone = self.logger.clone();
-        thread::spawn(move || {
+
+        self.running_threads.push(Some(thread::spawn(move || {
             mutex.acquire();
 
             if let Ok(mut not_released_nodes) = not_released_nodes_clone.write() {
@@ -319,7 +334,7 @@ impl Node {
                             node.to_string()));
                 }
             }
-        });
+        })));
     }
 
     fn handle_release_msg(&mut self, node: SocketAddr) {
