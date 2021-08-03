@@ -145,23 +145,14 @@ impl StdinReader {
         return line.to_string();
     }
 
+    /// Read Menu option input from stdin
     fn read_option(&mut self) -> String {
         self.menu();
         let option = self.read();
 
         match option.as_str() {
-            "1" => {
-                return self.option_add_block();
-            }
-            "2" => {
-                let blockchain = self.blockchain.read().unwrap().clone();
-                println!("{}", blockchain);
-                
-                for block in blockchain.blocks {
-                    self.blockchain_logger.info(format!("{:#?}\n", block));
-                }
-                
-            }
+            "1" => return self.option_add_block(),
+            "2" => self.option_show_blockchain(),
             "3" => return CLOSE.to_string(),
             _ => {
                 println!("Invalid option, choose again...")
@@ -171,6 +162,17 @@ impl StdinReader {
         return String::new();
     }
 
+    fn option_show_blockchain(&self) {
+        let blockchain = self.blockchain.read().unwrap().clone();
+        println!("{}", blockchain);
+        
+        for block in blockchain.blocks {
+            self.blockchain_logger.info(format!("{:#?}\n", block));
+        }
+    }
+
+    /// Await for leadr addr is set 
+    /// Is notificated with a leader condvar
     fn wait_for_leader(&self) {
         let (lock, cv) = &*self.leader_condvar;
 
@@ -199,6 +201,8 @@ impl StdinReader {
         *guard = false;
     }
 
+    /// If found that the leader is down change
+    ///  value of condvar and notify all nodes
     fn set_leader_down(&self) {
         let (lock_leader_down, cv_leader_down) = &*self.leader_down_cv;
         *lock_leader_down.lock().unwrap() = true;
