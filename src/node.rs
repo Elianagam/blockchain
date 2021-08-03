@@ -5,7 +5,7 @@ use crate::leader_discoverer::LeaderDiscoverer;
 use crate::leader_down_handler::LeaderDownHandler;
 use crate::stdin_reader::StdinReader;
 use crate::utils::messages::*;
-use crate::utils::socket_with_timeout::SocketWithTimeout;
+use crate::utils::socket::Socket;
 
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
@@ -18,10 +18,10 @@ const MUTEX_HOLD_TIMEOUT_SECS: u64 = 30;
 
 pub struct Node {
     pub my_address: Arc<RwLock<String>>,
-    pub socket: SocketWithTimeout,
+    pub socket: Socket,
     pub other_nodes: Arc<Vec<String>>,
     pub leader_addr: Arc<RwLock<Option<String>>>,
-    pub blockchain: Blockchain,
+    pub blockchain: Arc<RwLock<Blockchain>>,
     pub leader_condvar: Arc<(Mutex<bool>, Condvar)>,
     pub lock_acquired: Arc<(Mutex<bool>, Condvar)>,
     pub mutex: Arc<Semaphore>,
@@ -70,9 +70,9 @@ impl Node {
 
         Node {
             my_address: Arc::new(RwLock::new(my_address.clone())),
-            socket: SocketWithTimeout::new(socket),
+            socket: Socket::new(socket),
             leader_addr: Arc::new(RwLock::new(None)),
-            blockchain: Blockchain::new(),
+            blockchain: Arc::new(RwLock::new(Blockchain::new())),
             leader_condvar: Arc::new((Mutex::new(false), Condvar::new())),
             lock_acquired: Arc::new((Mutex::new(false), Condvar::new())),
             mutex: Arc::new(Semaphore::new(1)),
@@ -98,70 +98,81 @@ impl Node {
             let (_, from, msg) = self.socket.recv_from();
 
             match msg.as_str() {
-                WHO_IS_LEADER => {
-                    if self.i_know_the_leader() {
-                        self.check_if_i_am_leader(from.to_string());
-                    }
-                }
-                COORDINATOR => {
-                    self.handle_coordinator_msg(from);
-                }
-                BLOCKCHAIN => {
-                    self.blockchain = self.recv_blockchain();
-                    println!("{}", self.blockchain);
-                    for block in &self.blockchain.blocks {
-                        println!("{:?}", block);
-                    }
-                }
-                ACQUIRE_MSG => {
-                    let node_id_with_mutex_clone = self.node_id_with_mutex.clone();
-                    self.handle_acquire_msg(
-                        from,
-                        self.mutex.clone(),
-                        node_id_with_mutex_clone,
-                    );
-                }
-                RELEASE_MSG => {
-                    self.handle_release_msg(from);
-                }
-                LOCK_ACQUIRED => {
-                    self.handle_lock_acquired();
-                }
-                OK => {
-                    // Basicamente cada vez que recibamos un mensaje le hacemos un notify
-                    // a la otra convar y seteamos la IP del que recibimos.
-                    let (lock, cvar) = &*self.election_condvar;
-                    *lock.lock().unwrap() = Some(from.to_string());
-                    cvar.notify_all();
-                }
-                ELECTION => {
-                    self.socket
-                        .send_to(OK.to_string(), from.to_string())
-                        .unwrap();
-
-                    let (lock, cvar) = &*self.leader_down;
-                    *lock.lock().unwrap() = true;
-                    cvar.notify_all();
-                }
-                ACK_MSG => {
-                    let (lock, cv) = &*self.msg_ack_cv;
-                    *lock.lock().unwrap() = true;
-                    cv.notify_all();
-                }
-                msg => {
-                    self.handle_msg(msg, from);
-                }
+                ACQUIRE_MSG => self.handle_acquire_msg(from, self.mutex.clone(), self.node_id_with_mutex.clone()),
+                RELEASE_MSG => self.handle_release_msg(from),
+                LOCK_ACQUIRED => self.handle_lock_acquired(),
+                WHO_IS_LEADER => self.handle_who_is_leader(from),
+                COORDINATOR => self.handle_coordinator_msg(from),
+                BLOCKCHAIN => self.handle_blockchain_msg(),
+                OK => self.handle_ok_msg(from),
+                ELECTION => self.handle_election_msg(from),
+                ACK_MSG => self.handle_ack_msg(),
+                msg => self.handle_msg(msg, from),
             }
         }
     }
 
+    fn handle_who_is_leader(&mut self, from: SocketAddr) {
+        if self.i_know_the_leader() {
+            self.check_if_i_am_leader(from.to_string());
+        }
+    }
+
+    fn handle_blockchain_msg(&mut self) {
+        let mut blockchain = Blockchain::new();
+        loop {
+            let (_, from, msg) = self.socket.recv_from();
+            if msg == END {
+                break;
+            }
+            let mut block = Block::new(blockchain.get_last_block_hash());
+            block.add_record(self.read_record(msg, from));
+            if let Err(err) = blockchain.append_block(block) {
+                println!("{}", err);
+            }
+        }
+        if let Ok(mut blockchain_mut) = self.blockchain.write() {
+            *blockchain_mut = blockchain;
+        }
+    }
+
+    fn handle_ok_msg(&mut self, from: SocketAddr) {
+        // Basicamente cada vez que recibamos un mensaje le hacemos un notify
+        // a la otra convar y seteamos la IP del que recibimos.
+        let (lock, cvar) = &*self.election_condvar;
+        *lock.lock().unwrap() = Some(from.to_string());
+        cvar.notify_all();
+
+    }
+
+    fn handle_election_msg(&mut self, from: SocketAddr) {
+        self.socket
+            .send_to(OK.to_string(), from.to_string())
+            .unwrap();
+
+        let (lock, cvar) = &*self.leader_down;
+        *lock.lock().unwrap() = true;
+        cvar.notify_all();
+    }
+
+    fn handle_ack_msg(&mut self) {
+        let (lock, cv) = &*self.msg_ack_cv;
+        *lock.lock().unwrap() = true;
+        cv.notify_all();
+    }
+
     fn handle_msg(&mut self, msg: &str, from: SocketAddr) {
         let record = self.create_record(msg, from);
-        let mut block = Block::new(self.blockchain.get_last_block_hash());
-        block.add_record(record);
-        if let Err(err) = self.blockchain.append_block(block) {
-            println!("Error: {}", err);
+        
+        if let Ok(mut blockchain_mut) = self.blockchain.write() {
+            let mut block = Block::new(blockchain_mut.get_last_block_hash());
+            block.add_record(record);
+            match blockchain_mut.append_block(block) {
+                Err(_) => println!("Error"),
+                Ok(_) => {}
+            };
         }
+
         if self.i_am_leader() {
             self.socket
                 .send_to(ACK_MSG.to_string(), from.to_string())
@@ -171,7 +182,6 @@ impl Node {
                 self.socket.send_to(msg.to_string(), node.clone()).unwrap();
             }
         }
-        println!("{}", self.blockchain);
     }
 
     fn stdin_reader(&mut self) {
@@ -183,6 +193,7 @@ impl Node {
             self.msg_ack_cv.clone(),
             self.leader_down.clone(),
             self.lock_acquired.clone(),
+            self.blockchain.clone()
         );
 
         thread::spawn(move || {
@@ -342,43 +353,29 @@ impl Node {
         self.socket
             .send_to(BLOCKCHAIN.to_string(), from.clone())
             .unwrap();
-        for b in self.blockchain.get_blocks() {
-            let mut data_to_send = String::new();
-            match &b.records[0].record {
-                RecordData::CreateStudent(id, qualification) => {
-                    data_to_send.push_str(
-                        &(format!(
-                            "{},{},{},{}",
-                            &id,
-                            &(qualification.to_string()),
-                            &b.records[0].created_at.as_millis().to_string(),
-                            &b.records[0].from
-                        )),
-                    );
-                }
-            };
 
-            self.socket
-                .send_to(data_to_send, from.clone().to_string())
-                .unwrap();
+        if let Ok(blockchain_mut) = self.blockchain.read() {
+            for b in blockchain_mut.get_blocks() {
+                let mut data_to_send = String::new();
+                match &b.records[0].record {
+                    RecordData::CreateStudent(id, qualification) => {
+                        data_to_send.push_str(
+                            &(format!(
+                                "{},{},{},{}",
+                                &id,
+                                &(qualification.to_string()),
+                                &b.records[0].created_at.as_millis().to_string(),
+                                &b.records[0].from
+                            )),
+                        );
+                    }
+                };
+                self.socket
+                    .send_to(data_to_send, from.clone().to_string())
+                    .unwrap();
+            }
         }
         self.socket.send_to(END.to_string(), from).unwrap();
-    }
-
-    fn recv_blockchain(&mut self) -> Blockchain {
-        let mut blockchain = Blockchain::new();
-        loop {
-            let (_, from, msg) = self.socket.recv_from();
-            if msg == END {
-                break;
-            }
-            let mut block = Block::new(blockchain.get_last_block_hash());
-            block.add_record(self.read_record(msg, from));
-            if let Err(err) = blockchain.append_block(block) {
-                println!("{}", err);
-            }
-        }
-        blockchain
     }
 
     fn read_record(&self, msg: String, from: SocketAddr) -> Record {

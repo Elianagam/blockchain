@@ -1,5 +1,5 @@
 use crate::utils::messages::*;
-use crate::utils::socket_with_timeout::SocketWithTimeout;
+use crate::utils::socket::Socket;
 
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time;
@@ -11,7 +11,7 @@ pub struct LeaderDiscoverer {
     pub condvar: Arc<(Mutex<bool>, Condvar)>,
     pub leader_addr: Arc<RwLock<Option<String>>>,
     pub my_address: Arc<RwLock<String>>,
-    pub socket: SocketWithTimeout,
+    pub socket: Socket,
     pub other_nodes: Arc<Vec<String>>,
 }
 
@@ -20,7 +20,7 @@ impl LeaderDiscoverer {
         condvar: Arc<(Mutex<bool>, Condvar)>,
         leader_addr: Arc<RwLock<Option<String>>>,
         my_address: Arc<RwLock<String>>,
-        socket: SocketWithTimeout,
+        socket: Socket,
         other_nodes: Arc<Vec<String>>,
     ) -> Self {
         LeaderDiscoverer {

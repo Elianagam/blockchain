@@ -4,31 +4,35 @@ use std::option::Option;
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
 
+use crate::blockchain::blockchain::Blockchain;
 use crate::utils::messages::CLOSE;
-use crate::utils::socket_with_timeout::SocketWithTimeout;
+use crate::utils::socket::Socket;
 
 const ACK_TIMEOUT_SECS: u64 = 2;
 const WAITING_FOR_LOCK_ACQUIRED_TIMEOUT: u64 = 60;
 
 pub struct StdinReader {
     leader_condvar: Arc<(Mutex<bool>, Condvar)>,
-    socket: SocketWithTimeout,
+    socket: Socket,
     leader_addr: Arc<RwLock<Option<String>>>,
     node_alive: Arc<RwLock<bool>>,
     msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,
     leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
     lock_acquired: Arc<(Mutex<bool>, Condvar)>,
+    blockchain: Arc<RwLock<Blockchain>>
 }
 
 impl StdinReader {
     pub fn new(
         leader_condvar: Arc<(Mutex<bool>, Condvar)>,
-        socket: SocketWithTimeout,
+        socket: Socket,
         leader_addr: Arc<RwLock<Option<String>>>,
         node_alive: Arc<RwLock<bool>>,
         msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,
         leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
         lock_acquired: Arc<(Mutex<bool>, Condvar)>,
+        blockchain: Arc<RwLock<Blockchain>>
+
     ) -> Self {
         StdinReader {
             leader_condvar,
@@ -38,35 +42,19 @@ impl StdinReader {
             msg_ack_cv,
             leader_down_cv,
             lock_acquired,
+            blockchain
         }
     }
 
-    fn read_stdin(&mut self) -> String {
-        println!("Write a student note:");
-        let stdin = io::stdin();
-        let mut iterator = stdin.lock().lines();
-        let line = iterator.next().unwrap().unwrap();
-
-        let student_data: Vec<&str> = line.split(",").collect();
-        if (student_data.len() == 1 && (student_data[0] == CLOSE)) || student_data.len() == 2 {
-            return line.to_string();
-        } else {
-            println!("Unsupported data format, usage: id, qualification")
-        }
-        return String::new();
+    fn menu(&self) {
+        println!("Select an option:\n\t1. Add block\n\t2. Print Blockchain\n\t3. Exit");
     }
 
     pub fn run(&mut self) {
-        let (lock, cv) = &*self.leader_condvar;
-
-        {
-            let mut leader_found = lock.lock().unwrap();
-            while !*leader_found {
-                leader_found = cv.wait(leader_found).unwrap();
-            }
-        }
+        self.leader_found();
         loop {
             let value = self.read_stdin();
+            if &value == "" { continue; } 
             if &value == CLOSE {
                 let mut guard = self.node_alive.write().unwrap();
                 *guard = false;
@@ -103,6 +91,50 @@ impl StdinReader {
                 .unwrap();
 
             self.handler_ack();
+        }
+    }
+
+    fn read(&self) -> String {
+        let stdin = io::stdin();
+        let mut iterator = stdin.lock().lines();
+        let line = iterator.next().unwrap().unwrap();
+        line
+    }
+
+    fn option_add_block(&mut self) -> String {
+        println!("Write a block (id,qualification): ");
+        let line = self.read();
+        let student_data: Vec<&str> = line.split(",").collect();
+        if student_data.len() != 2 {
+            println!("Unsupported data format, usage: id, qualification")
+        }
+        return line.to_string();
+    }
+
+    fn read_stdin(&mut self) -> String {
+        self.menu();
+        let option = self.read();
+
+        match option.as_str() {
+            "1" => { return self.option_add_block(); }
+            "2" => { 
+                let blockchain = self.blockchain.read().unwrap().clone();
+                println!("{}", blockchain);
+            }
+            "3" => { return CLOSE.to_string() }
+            _ => {
+                println!("Invalid option, choose again...")
+            }
+        }
+        return String::new();
+    }
+
+    fn leader_found(&self) {
+        let (lock, cv) = &*self.leader_condvar;
+
+        let mut leader_found = lock.lock().unwrap();
+        while !*leader_found {
+            leader_found = cv.wait(leader_found).unwrap();
         }
     }
 
