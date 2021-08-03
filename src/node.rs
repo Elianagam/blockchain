@@ -11,8 +11,10 @@ use std::net::{SocketAddr, UdpSocket};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, SystemTime};
+use std_semaphore::Semaphore;
 
 const MAX_NODES: u32 = 50;
+const MUTEX_HOLD_TIMEOUT_SECS: u64 = 30;
 
 pub struct Node {
     pub my_address: Arc<RwLock<String>>,
@@ -21,7 +23,14 @@ pub struct Node {
     pub leader_addr: Arc<RwLock<Option<String>>>,
     pub blockchain: Arc<RwLock<Blockchain>>,
     pub leader_condvar: Arc<(Mutex<bool>, Condvar)>,
+    pub lock_acquired: Arc<(Mutex<bool>, Condvar)>,
+    pub mutex: Arc<Semaphore>,
+    pub node_id_with_mutex: Arc<RwLock<Option<SocketAddr>>>,
     pub election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
+
+    // Cantidad de nodos que tomaron el mutex pero que no lo liberaron
+    // debería ser en el peor de los casos 1 (si no hacemos un panic).
+    pub not_released_nodes: Arc<RwLock<i32>>,
 
     // El nodo esta vivo (no se hizo `close`)
     pub alive: Arc<RwLock<bool>>,
@@ -65,8 +74,12 @@ impl Node {
             leader_addr: Arc::new(RwLock::new(None)),
             blockchain: Arc::new(RwLock::new(Blockchain::new())),
             leader_condvar: Arc::new((Mutex::new(false), Condvar::new())),
+            lock_acquired: Arc::new((Mutex::new(false), Condvar::new())),
+            mutex: Arc::new(Semaphore::new(1)),
+            node_id_with_mutex: Arc::new(RwLock::new(None)),
             election_condvar: Arc::new((Mutex::new(None), Condvar::new())),
             alive: Arc::new(RwLock::new(true)),
+            not_released_nodes: Arc::new(RwLock::new(0)),
             msg_ack_cv: Arc::new((Mutex::new(false), Condvar::new())),
             leader_down: Arc::new((Mutex::new(false), Condvar::new())),
             running_bully: Arc::new(Mutex::new(false)),
@@ -83,7 +96,11 @@ impl Node {
 
         while *self.alive.read().unwrap() {
             let (_, from, msg) = self.socket.recv_from();
+
             match msg.as_str() {
+                ACQUIRE_MSG => self.handle_acquire_msg(from, self.mutex.clone(), self.node_id_with_mutex.clone()),
+                RELEASE_MSG => self.handle_release_msg(from),
+                LOCK_ACQUIRED => self.handle_lock_acquired(),
                 WHO_IS_LEADER => self.handle_who_is_leader(from),
                 COORDINATOR => self.handle_coordinator_msg(from),
                 BLOCKCHAIN => self.handle_blockchain_msg(),
@@ -175,7 +192,8 @@ impl Node {
             self.alive.clone(),
             self.msg_ack_cv.clone(),
             self.leader_down.clone(),
-            self.blockchain.clone(),
+            self.lock_acquired.clone(),
+            self.blockchain.clone()
         );
 
         thread::spawn(move || {
@@ -230,10 +248,15 @@ impl Node {
         }
     }
 
+    fn handle_lock_acquired(&self) -> () {
+        let (lock, cvar) = &*self.lock_acquired;
+        *lock.lock().unwrap() = true;
+        cvar.notify_all();
+    }
+
     fn handle_coordinator_msg(&mut self, leader: SocketAddr) -> () {
         let (lock, cvar) = &*self.leader_condvar;
-        let mut leader_found = lock.lock().unwrap();
-        *leader_found = true;
+        *lock.lock().unwrap() = true;
         cvar.notify_all();
 
         if let Ok(mut leader_addr_mut) = self.leader_addr.write() {
@@ -249,6 +272,68 @@ impl Node {
         let (lock, _) = &*self.leader_down;
         *lock.lock().unwrap() = false;
         *self.running_bully.lock().unwrap() = false;
+    }
+
+    fn handle_acquire_msg(
+        &mut self,
+        node: SocketAddr,
+        mutex: Arc<Semaphore>,
+        node_id_with_mutex: Arc<RwLock<Option<SocketAddr>>>,
+    ) {
+        let mut socket_clone = self.socket.try_clone();
+        let not_released_nodes_clone = self.not_released_nodes.clone();
+
+        thread::spawn(move || {
+            mutex.acquire();
+
+            if let Ok(mut not_released_nodes) = not_released_nodes_clone.write() {
+                *not_released_nodes = *not_released_nodes + 1;
+            }
+
+            if let Ok(mut node_id) = node_id_with_mutex.write() {
+                *node_id = Some(node);
+            }
+            socket_clone
+                .send_to(LOCK_ACQUIRED.to_string(), node.to_string())
+                .unwrap();
+
+
+            // Si paso un timeout sin recibir RELEASE, hago un release
+            thread::sleep(Duration::from_secs(MUTEX_HOLD_TIMEOUT_SECS));
+
+            if let Ok(mut not_released_nodes) = not_released_nodes_clone.write() {
+                if *not_released_nodes > 1 { panic!("not_released_nodes > 1") }
+
+                if *not_released_nodes == 1 {
+                    mutex.release();
+                    *not_released_nodes = 0;
+                    println!(
+                        "Mutex released because node {} was disconnected",
+                        node.to_string()
+                    );
+                }
+            }
+        });
+    }
+
+    fn handle_release_msg(&mut self, node: SocketAddr) {
+        // Only if the node that had the mutex sent the release
+        if node != (*self.node_id_with_mutex.read().unwrap()).unwrap() {
+            return;
+        }
+
+        if let Ok(mut not_released_nodes) = self.not_released_nodes.write() {
+            if *not_released_nodes == 1 {
+                self.mutex.release();
+                *not_released_nodes = 0;
+            } else if *not_released_nodes > 1 {
+                panic!("not_released_nodes > 1")
+            }
+        }
+
+        if let Ok(mut node_id) = self.node_id_with_mutex.write() {
+            *node_id = None;
+        }
     }
 
     fn check_if_i_am_leader(&mut self, node_that_asked: String) -> () {
