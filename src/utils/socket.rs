@@ -4,18 +4,18 @@ use crate::encoder::{decode_from_bytes, encode_to_bytes};
 
 const RECV_BUF_SIZE: usize = 128;
 
-pub struct SocketWithTimeout {
+pub struct Socket {
     socket: UdpSocket,
 }
 
-impl SocketWithTimeout {
+impl Socket {
     pub fn new(socket: UdpSocket) -> Self {
-        SocketWithTimeout { socket }
+        Socket { socket }
     }
 
-    pub fn try_clone(&mut self) -> SocketWithTimeout {
+    pub fn try_clone(&mut self) -> Socket {
         let clone = self.socket.try_clone().unwrap();
-        SocketWithTimeout::new(clone)
+        Socket::new(clone)
     }
 
     pub fn send_to(&mut self, msg: String, addr: String) -> Result<usize, std::io::Error> {

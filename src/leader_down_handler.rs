@@ -1,5 +1,5 @@
 use crate::utils::messages::*;
-use crate::utils::socket_with_timeout::SocketWithTimeout;
+use crate::utils::socket::Socket;
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
 
@@ -8,7 +8,7 @@ const ELECTION_TIMEOUT_SECS: u64 = 1;
 
 pub struct LeaderDownHandler {
     pub my_address: Arc<RwLock<String>>,
-    pub socket: SocketWithTimeout,
+    pub socket: Socket,
     pub election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
     pub leader_down: Arc<(Mutex<bool>, Condvar)>,
     pub running_bully: Arc<Mutex<bool>>,
@@ -17,7 +17,7 @@ pub struct LeaderDownHandler {
 impl LeaderDownHandler {
     pub fn new(
         my_address: Arc<RwLock<String>>,
-        socket: SocketWithTimeout,
+        socket: Socket,
         election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
         leader_down: Arc<(Mutex<bool>, Condvar)>,
         running_bully: Arc<Mutex<bool>>,
