@@ -395,9 +395,7 @@ impl Node {
                 student_data[0].into(),
                 student_data[1].parse::<u32>().unwrap(),
             ),
-            SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap(),
+            Duration::from_millis(student_data[2].parse::<u64>().unwrap()),
         );
         record
     }
