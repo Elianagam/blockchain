@@ -322,6 +322,7 @@ impl Node {
         });
     }
 
+    ///  Notify all node that the mutex was realese after begin adquired
     fn handle_release_msg(&mut self, node: SocketAddr) {
         // Only if the node that had the mutex sent the release
         if node != (*self.node_id_with_mutex.read().unwrap()).unwrap() {
@@ -342,6 +343,8 @@ impl Node {
         }
     }
 
+    /// If I am leader send msg to al node conected 
+    /// All node after recv coordinator msg will save my addr as leader_addr
     fn check_if_i_am_leader(&mut self, node_that_asked: String) -> () {
         if self.i_am_leader() {
             self.socket
@@ -351,6 +354,7 @@ impl Node {
         }
     }
 
+    /// Send complete blockchain when a new node is conected
     fn send_blockchain(&mut self, from: String) {
         self.socket
             .send_to(BLOCKCHAIN.to_string(), from.clone())
@@ -380,6 +384,7 @@ impl Node {
         self.socket.send_to(END.to_string(), from).unwrap();
     }
 
+    /// Read record info from addrs 
     fn read_record(&self, msg: String, from: SocketAddr) -> Record {
         let student_data: Vec<&str> = msg.split(",").collect();
         let record = Record::new(
@@ -393,6 +398,7 @@ impl Node {
         record
     }
 
+    /// Create record from msg to be save in blockchain 
     fn create_record(&self, msg: &str) -> Record {
         let student_data: Vec<&str> = msg.split(",").collect();
         let record = Record::new(
