@@ -161,10 +161,7 @@ impl StdinReader {
         return String::new();
     }
 
-<<<<<<< HEAD
     /// Print blockchain in stdout if option 2 was choseen
-=======
->>>>>>> main
     fn option_show_blockchain(&self) {
         let blockchain = self.blockchain.read().unwrap().clone();
         println!("{}", blockchain);
