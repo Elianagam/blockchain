@@ -126,7 +126,6 @@ impl Node {
         let (lock, cvar) = &*self.election_condvar;
         *lock.lock().unwrap() = Some(from.to_string());
         cvar.notify_all();
-
     }
 
     fn handle_election_msg(&mut self, from: SocketAddr) {
@@ -147,7 +146,7 @@ impl Node {
 
     fn handle_msg(&mut self, msg: &str, from: SocketAddr) {
         let record = self.create_record(msg, from);
-        
+
         if let Ok(mut blockchain_mut) = self.blockchain.write() {
             let mut block = Block::new(blockchain_mut.get_last_block_hash());
             block.add_record(record);
@@ -176,7 +175,7 @@ impl Node {
             self.alive.clone(),
             self.msg_ack_cv.clone(),
             self.leader_down.clone(),
-            self.blockchain.clone()
+            self.blockchain.clone(),
         );
 
         thread::spawn(move || {
