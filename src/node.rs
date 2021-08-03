@@ -107,6 +107,7 @@ impl Node {
                 OK => self.handle_ok_msg(from),
                 ELECTION => self.handle_election_msg(from),
                 ACK_MSG => self.handle_ack_msg(),
+                NOOP_MSG => {},
                 msg => self.handle_msg(msg, from),
             }
         }

@@ -58,6 +58,8 @@ impl StdinReader {
             if &value == CLOSE {
                 let mut guard = self.node_alive.write().unwrap();
                 *guard = false;
+                let me = self.socket.local_addr().to_string();
+                self.socket.send_to(NOOP_MSG.to_string(), me).unwrap();
                 break;
             }
             let addr = self.leader_addr.read().unwrap().clone();
