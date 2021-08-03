@@ -2,16 +2,16 @@ use super::record::Record;
 extern crate blake2;
 use blake2::{Blake2b, Digest};
 
-/// One single part of the blockchain that contains a list of records
+/// A single part of the blockchain that contains a list of student records
 #[derive(Clone, Debug)]
 pub struct Block {
-    /// Actions that this block includes (at least one)
+    /// The list of all the records in the block
     pub(crate) records: Vec<Record>,
 
-    /// Connects the blocks together
+    /// The hash that connects the blocks together
     pub prev_hash: Option<String>,
 
-    /// Hash of the current block (in order to save the last block from being tampered)
+    /// Hash of the current block
     pub hash: Option<String>,
 }
 
@@ -24,7 +24,8 @@ impl Block {
         }
     }
 
-    /// Will calculate the hash of the whole block including records Blake2 hasher
+    /// Calculates the hash of the whole block using all the records
+    /// of the block and the block itself
     pub fn calculate_hash(&self) -> Vec<u8> {
         let mut hasher = Blake2b::new();
 
@@ -38,40 +39,30 @@ impl Block {
         return Vec::from(hasher.finalize().as_ref());
     }
 
-    /// Appends a record to the queue
+    /// Appends a new record to the list
     pub fn add_record(&mut self, record: Record) {
         self.records.push(record);
         self.update_hash();
     }
 
-    /// Will return the amount of transactions
-    pub fn get_transaction_count(&self) -> usize {
+    /// The amount of records in the block
+    pub fn get_records_count(&self) -> usize {
         self.records.len()
     }
 
-    /// Will update the hash field by including all transactions currently inside
-    /// the public modifier is only for the demonstration of attacks
+    /// Updates the current hash based on all the records and the block itself
     pub(crate) fn update_hash(&mut self) {
         self.hash = Some(byte_vector_to_string(&self.calculate_hash()));
     }
 
-    /// Checks if the hash is set and matches the blocks interna
+    /// Checks if the hash is set and equals the internal calculated hash of the block
     pub fn verify_own_hash(&self) -> bool {
-        if self.hash.is_some() && // Hash set
-            self.hash.as_ref().unwrap().eq(
-                &byte_vector_to_string(
-                    &self.calculate_hash()))
-        {
-            // Hash equals calculated hash
-
-            return true;
-        }
-        false
+        return self.hash.is_some() && 
+                self.hash.as_ref().unwrap().eq(&byte_vector_to_string(&self.calculate_hash()));
     }
 }
 
-/// Will take an array of bytes and transform it into a string by interpreting every byte
-/// as an character
+/// Takes an array of bytes and returns a string by taking every byte as a character
 pub fn byte_vector_to_string(arr: &Vec<u8>) -> String {
     arr.iter().map(|&c| c as char).collect()
 }

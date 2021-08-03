@@ -1,7 +1,7 @@
 use super::blockchain::Blockchain;
 use super::student::Student;
-/// The current state of the blockchain after all Blocks are executed
-/// Expected interface into the Blockchain
+/// The current state of the blockchain after all Blocks are added
+/// Interface into the Blockchain
 pub trait WorldState {
     /// Returns all registered student ids
     fn get_student_ids(&self) -> Vec<String>;

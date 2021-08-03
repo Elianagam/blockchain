@@ -15,11 +15,10 @@ pub struct Record {
     pub(crate) record: RecordData,
 }
 
-/// The operation to be stored on the chain
+/// The operation to be stored on the blockchain
 #[derive(Clone, Debug, PartialEq)]
 pub enum RecordData {
-    CreateStudent(String, u32),
-    //UpdateQualification { student: String, qualification: u32 },
+    CreateStudent(String, u32)
 }
 
 impl Record {
@@ -31,26 +30,16 @@ impl Record {
         }
     }
 
-    /// Will change the world state according to the transactions commands
+    /// Will change the world state
     pub fn execute(&self, world_state: &mut dyn WorldState) -> Result<(), &'static str> {
-        // match is like a switch (pattern matching) in C++ or Java
-        // We will check for the type of transaction here and execute its logic
         return match &self.record {
             RecordData::CreateStudent(id, qualification) => {
                 world_state.create_student(id.into(), *qualification)
-            } /*RecordData::UpdateQualification { student, qualification } => {
-                  // Get the student (must exist)
-                  return if let Some(student) = world_state.get_student_by_id_mut(student) {
-                      student.qualification = *qualification;
-                      Ok(())
-                  } else {
-                      Err("Student does not exist")
-                  };
-              }*/
+            }
         };
     }
 
-    /// Will calculate the hash using Blake2 hasher
+    /// Calculates the hash using Blake2 hasher
     pub fn calculate_hash(&self) -> Vec<u8> {
         let mut hasher = Blake2b::new();
         let record_as_string = format!("{:?}", (&self.created_at, &self.record, &self.from));
