@@ -2,17 +2,16 @@ use std::io::{self, BufRead};
 use std::option::Option;
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
+
 use crate::blockchain::blockchain::Blockchain;
-
-
-use crate::utils::messages::{CLOSE};
-use crate::utils::socket_with_timeout::SocketWithTimeout;
+use crate::utils::messages::CLOSE;
+use crate::utils::socket::Socket;
 
 const ACK_TIMEOUT_SECS: u64 = 2;
 
 pub struct StdinReader {
     leader_condvar: Arc<(Mutex<bool>, Condvar)>,
-    socket: SocketWithTimeout,
+    socket: Socket,
     leader_addr: Arc<RwLock<Option<String>>>,
     node_alive: Arc<RwLock<bool>>,
     msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,
@@ -23,7 +22,7 @@ pub struct StdinReader {
 impl StdinReader {
     pub fn new(
         leader_condvar: Arc<(Mutex<bool>, Condvar)>,
-        socket: SocketWithTimeout,
+        socket: Socket,
         leader_addr: Arc<RwLock<Option<String>>>,
         node_alive: Arc<RwLock<bool>>,
         msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,

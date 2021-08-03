@@ -1,6 +1,4 @@
 pub const END: &str = "-";
-pub const ACQUIRE_MSG: &str = "acquire\n";
-pub const RELEASE_MSG: &str = "release\n";
 pub const BLOCKCHAIN: &str = "blockchain";
 pub const CLOSE: &str = "close";
 pub const WHO_IS_LEADER: &str = "who_is_leader";
