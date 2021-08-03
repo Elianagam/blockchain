@@ -6,7 +6,6 @@ use std::time::{Duration, SystemTime};
 
 use crate::blockchain::blockchain::Blockchain;
 use crate::utils::logger::Logger;
-use crate::utils::messages::*;
 use crate::utils::socket::Socket;
 
 const ACK_TIMEOUT_SECS: u64 = 2;
@@ -162,7 +161,10 @@ impl StdinReader {
         return String::new();
     }
 
+<<<<<<< HEAD
     /// Print blockchain in stdout if option 2 was choseen
+=======
+>>>>>>> main
     fn option_show_blockchain(&self) {
         let blockchain = self.blockchain.read().unwrap().clone();
         println!("{}", blockchain);

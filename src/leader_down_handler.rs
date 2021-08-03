@@ -13,7 +13,8 @@ pub struct LeaderDownHandler {
     pub election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
     pub leader_down: Arc<(Mutex<bool>, Condvar)>,
     pub running_bully: Arc<Mutex<bool>>,
-    pub logger: Arc<Logger>
+    pub logger: Arc<Logger>,
+    pub alive: Arc<RwLock<bool>>,
 }
 
 impl LeaderDownHandler {
@@ -23,7 +24,8 @@ impl LeaderDownHandler {
         election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
         leader_down: Arc<(Mutex<bool>, Condvar)>,
         running_bully: Arc<Mutex<bool>>,
-        logger: Arc<Logger>
+        logger: Arc<Logger>,
+        alive: Arc<RwLock<bool>>,
     ) -> Self {
         LeaderDownHandler {
             my_address,
@@ -31,20 +33,24 @@ impl LeaderDownHandler {
             election_condvar,
             leader_down,
             running_bully,
-            logger
+            logger,
+            alive,
         }
     }
 
     pub fn run(&mut self) -> () {
-        loop {
+        while *self.alive.read().unwrap() {
             let (lock, cv) = &*self.leader_down;
 
             {
                 let mut leader_down = lock.lock().unwrap();
                 // *guard: el lider murio
-                while !*leader_down {
+                while !*leader_down && *self.alive.read().unwrap() {
                     leader_down = cv.wait(leader_down).unwrap();
                 }
+            }
+            if !*self.alive.read().unwrap() {
+                return;
             }
 
             if !*self.running_bully.lock().unwrap() {
