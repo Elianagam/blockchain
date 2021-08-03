@@ -7,6 +7,10 @@ use crate::utils::logger::Logger;
 const MAX_NODES: u32 = 50;
 const ELECTION_TIMEOUT_SECS: u64 = 1;
 
+
+/// Responsible for check if the leader is down
+/// and found a new node to be the leader
+/// and notify all node for set the new leader addr
 pub struct LeaderDownHandler {
     pub my_address: Arc<RwLock<String>>,
     pub socket: Socket,
@@ -106,12 +110,14 @@ impl LeaderDownHandler {
         addrs
     }
 
+    /// Get port from addrs
     fn get_port_from_addr(&self, addr: String) -> u32 {
         addr.split(":").collect::<Vec<&str>>()[1]
             .parse::<u32>()
             .unwrap()
     }
 
+    /// Find port bigger that my addr port 
     fn find_upper_sockets(&self) -> Vec<String> {
         let mut upper_nodes = vec![];
 
