@@ -12,6 +12,8 @@ use crate::utils::socket::Socket;
 const ACK_TIMEOUT_SECS: u64 = 2;
 const WAITING_FOR_LOCK_ACQUIRED_TIMEOUT: u64 = 15;
 
+/// Responsible for read msg from stdin with diferent options
+/// 
 pub struct StdinReader {
     leader_condvar: Arc<(Mutex<bool>, Condvar)>,
     socket: Socket,
@@ -49,17 +51,19 @@ impl StdinReader {
         }
     }
 
+    /// Print menu string with options
     fn menu(&self) {
         println!("Select an option:\n\t1. Add block\n\t2. Print Blockchain\n\t3. Exit");
     }
 
+    /// Await until leader is set and read from stdin
+    /// If the msg is a new block adquire mutex and 
+    /// sent that msg to leader addr if the mutex is taken
+    /// Sent the block and realese mutex
     pub fn run(&mut self) {
-
         loop {
-
             self.wait_for_leader();
-
-            let value = self.read_stdin();
+            let value = self.read_option();
             if &value == "" {
                 continue;
             }
@@ -121,6 +125,7 @@ impl StdinReader {
         }
     }
 
+    /// Read a new line from stdin
     fn read(&self) -> String {
         let stdin = io::stdin();
         let mut iterator = stdin.lock().lines();
@@ -128,6 +133,8 @@ impl StdinReader {
         line
     }
 
+    /// If option to add new block was choseen 
+    /// then read again from stdin and return value if is valis
     fn option_add_block(&mut self) -> String {
         println!("Write a block (id,qualification): ");
         let line = self.read();
@@ -138,23 +145,14 @@ impl StdinReader {
         return line.to_string();
     }
 
-    fn read_stdin(&mut self) -> String {
+    /// Read Menu option input from stdin
+    fn read_option(&mut self) -> String {
         self.menu();
         let option = self.read();
 
         match option.as_str() {
-            "1" => {
-                return self.option_add_block();
-            }
-            "2" => {
-                let blockchain = self.blockchain.read().unwrap().clone();
-                println!("{}", blockchain);
-                
-                for block in blockchain.blocks {
-                    self.blockchain_logger.info(format!("{:#?}\n", block));
-                }
-                
-            }
+            "1" => return self.option_add_block(),
+            "2" => self.option_show_blockchain(),
             "3" => return CLOSE.to_string(),
             _ => {
                 println!("Invalid option, choose again...")
@@ -164,6 +162,17 @@ impl StdinReader {
         return String::new();
     }
 
+    fn option_show_blockchain(&self) {
+        let blockchain = self.blockchain.read().unwrap().clone();
+        println!("{}", blockchain);
+        
+        for block in blockchain.blocks {
+            self.blockchain_logger.info(format!("{:#?}\n", block));
+        }
+    }
+
+    /// Await for leadr addr is set 
+    /// Is notificated with a leader condvar
     fn wait_for_leader(&self) {
         let (lock, cv) = &*self.leader_condvar;
 
@@ -192,6 +201,8 @@ impl StdinReader {
         *guard = false;
     }
 
+    /// If found that the leader is down change
+    ///  value of condvar and notify all nodes
     fn set_leader_down(&self) {
         let (lock_leader_down, cv_leader_down) = &*self.leader_down_cv;
         *lock_leader_down.lock().unwrap() = true;

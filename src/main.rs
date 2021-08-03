@@ -26,16 +26,16 @@ fn main() {
     if args.len() < 2 {
         process::exit(port_missing());
     }
-    let logger = match Logger::new(&args[1]) {
+    let logger = match Logger::new(&format!("log_{}",&args[1])) {
         Ok(logger) => Arc::new(logger),
         Err(e) => {
             println!("{} {:?}: {}", MESSAGE_LOGGER_ERROR, &args[1], e);
             process::exit(-1);
         }
     };
-    println!("Logging messages will be saved to: {:?}.", args[1]);
+    println!("Logging messages will be saved to: log_{:?}.", args[1]);
 
-    let blockchain_filename = format!("{}_blockchain", args[1]);
+    let blockchain_filename = format!("log_{}_blockchain", args[1]);
 
     let blockchain_logger = match Logger::new(&blockchain_filename) {
         Ok(logger) => Arc::new(logger),
