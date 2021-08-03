@@ -144,9 +144,6 @@ impl StdinReader {
             }
             "2" => {
                 let blockchain = self.blockchain.read().unwrap().clone();
-                for block in &blockchain.blocks {
-                    println!("{:?}", block);
-                }
                 println!("{}", blockchain);
             }
             "3" => return CLOSE.to_string(),
