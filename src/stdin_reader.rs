@@ -139,7 +139,8 @@ impl StdinReader {
         let line = self.read();
         let student_data: Vec<&str> = line.split(",").collect();
         if student_data.len() != 2 {
-            println!("Unsupported data format, usage: id, qualification")
+            println!("Unsupported data format, usage: id, qualification");
+            return String::new();
         }
         return line.to_string();
     }
