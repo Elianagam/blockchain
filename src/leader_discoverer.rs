@@ -8,6 +8,9 @@ use std::time::Duration;
 
 const LEADER_DISCOVER_TIMEOUT_SECS: u64 = 2;
 
+/// Responsible for discover who the leader addrs is 
+/// and change the value from the leader
+/// only the first time when the node is conected
 pub struct LeaderDiscoverer {
     pub condvar: Arc<(Mutex<bool>, Condvar)>,
     pub leader_addr: Arc<RwLock<Option<String>>>,

@@ -7,6 +7,10 @@ use crate::utils::logger::Logger;
 const MAX_NODES: u32 = 50;
 const ELECTION_TIMEOUT_SECS: u64 = 1;
 
+
+/// Responsible for check if the leader is down
+/// and found a new node to be the leader
+/// and notify all node for set the new leader addr
 pub struct LeaderDownHandler {
     pub my_address: Arc<RwLock<String>>,
     pub socket: Socket,
