@@ -5,6 +5,7 @@ use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::{Duration, SystemTime};
 
 use crate::blockchain::blockchain::Blockchain;
+use crate::utils::logger::Logger;
 use crate::utils::messages::*;
 use crate::utils::socket::Socket;
 
@@ -20,6 +21,7 @@ pub struct StdinReader {
     leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
     lock_acquired: Arc<(Mutex<bool>, Condvar)>,
     blockchain: Arc<RwLock<Blockchain>>,
+    blockchain_logger: Arc<Logger>
 }
 
 impl StdinReader {
@@ -31,7 +33,8 @@ impl StdinReader {
         msg_ack_cv: Arc<(Mutex<bool>, Condvar)>,
         leader_down_cv: Arc<(Mutex<bool>, Condvar)>,
         lock_acquired: Arc<(Mutex<bool>, Condvar)>,
-        blockchain: Arc<RwLock<Blockchain>>
+        blockchain: Arc<RwLock<Blockchain>>,
+        blockchain_logger: Arc<Logger>
     ) -> Self {
         StdinReader {
             leader_condvar,
@@ -41,7 +44,8 @@ impl StdinReader {
             msg_ack_cv,
             leader_down_cv,
             lock_acquired,
-            blockchain
+            blockchain,
+            blockchain_logger
         }
     }
 
@@ -144,6 +148,7 @@ impl StdinReader {
             }
             "2" => {
                 let blockchain = self.blockchain.read().unwrap().clone();
+                self.blockchain_logger.info("blockchain".to_string());
                 println!("{}", blockchain);
             }
             "3" => return CLOSE.to_string(),
