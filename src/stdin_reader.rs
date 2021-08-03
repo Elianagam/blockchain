@@ -162,6 +162,7 @@ impl StdinReader {
         return String::new();
     }
 
+    /// Print blockchain in stdout if option 2 was choseen
     fn option_show_blockchain(&self) {
         let blockchain = self.blockchain.read().unwrap().clone();
         println!("{}", blockchain);
@@ -183,6 +184,7 @@ impl StdinReader {
         }
     }
 
+    /// Whait for leader ack msg to check if the leader is down
     fn wait_for_ack(&self) {
         let (lock, cv) = &*self.msg_ack_cv;
         let mut guard = lock.lock().unwrap();

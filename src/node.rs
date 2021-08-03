@@ -167,6 +167,8 @@ impl Node {
         cv.notify_all();
     }
 
+    /// Handler any msg from reading from stdin 
+    /// 
     fn handle_msg(&mut self, msg: &str, from: SocketAddr) {
         let record = self.create_record(msg);
 
@@ -190,6 +192,7 @@ impl Node {
         }
     }
 
+    /// Spawn thread for read from stdin
     fn stdin_reader(&mut self) {
         let mut reader = StdinReader::new(
             self.leader_condvar.clone(),
@@ -208,6 +211,7 @@ impl Node {
         });
     }
 
+    /// Spawn Thread to check which is the addr of the leader
     fn discover_leader(&mut self) -> () {
         let mut leader_discoverer = LeaderDiscoverer::new(
             self.leader_condvar.clone(),
@@ -223,6 +227,7 @@ impl Node {
         });
     }
 
+    /// Spawn Thread from bully algoritm to check if the leader is down
     fn detect_if_leader_is_down(&mut self) -> () {
         let mut leader_down_handler = LeaderDownHandler::new(
             self.my_address.clone(),
@@ -238,6 +243,7 @@ impl Node {
         });
     }
 
+    /// Check if the leader addrs was set
     fn i_know_the_leader(&mut self) -> bool {
         if let Ok(leader_addr_mut) = self.leader_addr.read() {
             return !leader_addr_mut.is_none();
@@ -245,6 +251,7 @@ impl Node {
         false
     }
 
+    /// Check if i am the leader and return true if I am or false in other case
     fn i_am_leader(&mut self) -> bool {
         if let Ok(leader_addr_mut) = self.leader_addr.read() {
             if *leader_addr_mut == None {
@@ -257,12 +264,15 @@ impl Node {
         }
     }
 
+    /// Take the lock and notify all that de lock has been taken
     fn handle_lock_acquired(&self) -> () {
         let (lock, cvar) = &*self.lock_acquired;
         *lock.lock().unwrap() = true;
         cvar.notify_all();
     }
 
+    /// When a node recv a coordinator msg then has to set
+    /// Addr from that msg to the leader addr
     fn handle_coordinator_msg(&mut self, leader: SocketAddr) -> () {
         let (lock, cvar) = &*self.leader_condvar;
         *lock.lock().unwrap() = true;
