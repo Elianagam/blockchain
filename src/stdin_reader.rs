@@ -2,7 +2,7 @@ use crate::utils::messages::*;
 use std::io::{self, BufRead};
 use std::option::Option;
 use std::sync::{Arc, Condvar, Mutex, RwLock};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use crate::blockchain::blockchain::Blockchain;
 use crate::utils::messages::*;
@@ -95,9 +95,19 @@ impl StdinReader {
                     continue;
                 }
             }
-
+            
+            let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
+            let mut data_to_send = String::new();
+            data_to_send.push_str(
+                &(format!(
+                    "{},{},{}",
+                    &value,
+                    &now,
+                    &self.socket.local_addr().to_string()
+                ))
+            );
             // Nos dieron el lock
-            self.socket.send_to(value, addr.clone().unwrap()).unwrap();
+            self.socket.send_to(data_to_send, addr.clone().unwrap()).unwrap();
 
             self.wait_for_ack();
 

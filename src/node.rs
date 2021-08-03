@@ -162,7 +162,7 @@ impl Node {
     }
 
     fn handle_msg(&mut self, msg: &str, from: SocketAddr) {
-        let record = self.create_record(msg, from);
+        let record = self.create_record(msg);
 
         if let Ok(mut blockchain_mut) = self.blockchain.write() {
             let mut block = Block::new(blockchain_mut.get_last_block_hash());
@@ -387,17 +387,15 @@ impl Node {
         record
     }
 
-    fn create_record(&self, msg: &str, from: SocketAddr) -> Record {
+    fn create_record(&self, msg: &str) -> Record {
         let student_data: Vec<&str> = msg.split(",").collect();
         let record = Record::new(
-            from.to_string().into(),
+            student_data[3].to_string(),
             RecordData::CreateStudent(
                 student_data[0].into(),
                 student_data[1].parse::<u32>().unwrap(),
             ),
-            SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap(),
+            Duration::from_millis(student_data[2].parse::<u64>().unwrap()),
         );
         record
     }
