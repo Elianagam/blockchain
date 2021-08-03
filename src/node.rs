@@ -7,7 +7,6 @@ use crate::stdin_reader::StdinReader;
 use crate::utils::messages::*;
 use crate::utils::socket::Socket;
 
-use std::io::Read;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread;

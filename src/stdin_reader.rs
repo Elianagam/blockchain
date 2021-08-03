@@ -4,7 +4,7 @@ use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
 
 use crate::blockchain::blockchain::Blockchain;
-use crate::utils::messages::CLOSE;
+use crate::utils::messages::*;
 use crate::utils::socket::Socket;
 
 const ACK_TIMEOUT_SECS: u64 = 2;
