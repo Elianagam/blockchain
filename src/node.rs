@@ -6,11 +6,12 @@ use crate::leader_down_handler::LeaderDownHandler;
 use crate::stdin_reader::StdinReader;
 use crate::utils::messages::*;
 use crate::utils::socket::Socket;
+use crate::utils::logger::Logger;
 
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration};
 use std_semaphore::Semaphore;
 
 const MAX_NODES: u32 = 50;
@@ -27,6 +28,8 @@ pub struct Node {
     pub mutex: Arc<Semaphore>,
     pub node_id_with_mutex: Arc<RwLock<Option<SocketAddr>>>,
     pub election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
+    pub logger: Arc<Logger>,
+    pub blockchain_logger: Arc<Logger>,
 
     // Cantidad de nodos que tomaron el mutex pero que no lo liberaron
     // debería ser en el peor de los casos 1 (si no hacemos un panic).
@@ -54,7 +57,7 @@ fn build_addr_list(skip_addr: &String) -> Vec<String> {
 }
 
 impl Node {
-    pub fn new(port_number: &str) -> Self {
+    pub fn new(port_number: &str, logger: Arc<Logger>, blockchain_logger: Arc<Logger>) -> Self {
         let port_number = port_number.parse::<u32>().unwrap();
         if port_number < 8000 || port_number > (8000 + MAX_NODES) {
             panic!(
@@ -84,11 +87,14 @@ impl Node {
             leader_down: Arc::new((Mutex::new(false), Condvar::new())),
             running_bully: Arc::new(Mutex::new(false)),
             other_nodes,
+            logger,
+            blockchain_logger
         }
     }
 
     pub fn run(&mut self) -> () {
-        println!("Running node on: {} ", self.socket.local_addr().to_string());
+        self.logger.info(format!("Running node on: {} ", 
+                        self.socket.local_addr().to_string()));
 
         self.discover_leader();
         self.detect_if_leader_is_down();
@@ -193,7 +199,8 @@ impl Node {
             self.msg_ack_cv.clone(),
             self.leader_down.clone(),
             self.lock_acquired.clone(),
-            self.blockchain.clone()
+            self.blockchain.clone(),
+            self.blockchain_logger.clone()
         );
 
         thread::spawn(move || {
@@ -208,6 +215,7 @@ impl Node {
             self.my_address.clone(),
             self.socket.try_clone(),
             self.other_nodes.clone(),
+            self.logger.clone()
         );
 
         thread::spawn(move || {
@@ -222,6 +230,7 @@ impl Node {
             self.election_condvar.clone(),
             self.leader_down.clone(),
             self.running_bully.clone(),
+            self.logger.clone()
         );
 
         thread::spawn(move || {
@@ -264,10 +273,8 @@ impl Node {
         }
         let mut leader_addr = (*self.leader_addr.read().unwrap()).clone();
 
-        println!(
-            "New leader found in address: {}",
-            leader_addr.get_or_insert("??".to_string())
-        );
+        self.logger.info(format!("New leader found in address: {}", 
+                        leader_addr.get_or_insert("??".to_string())));
 
         let (lock, _) = &*self.leader_down;
         *lock.lock().unwrap() = false;
@@ -283,6 +290,7 @@ impl Node {
         let mut socket_clone = self.socket.try_clone();
         let not_released_nodes_clone = self.not_released_nodes.clone();
 
+        let logger_clone = self.logger.clone();
         thread::spawn(move || {
             mutex.acquire();
 
@@ -307,10 +315,8 @@ impl Node {
                 if *not_released_nodes == 1 {
                     mutex.release();
                     *not_released_nodes = 0;
-                    println!(
-                        "Mutex released because node {} was disconnected",
-                        node.to_string()
-                    );
+                    logger_clone.info(format!("Mutex released because node {} was disconnected",
+                            node.to_string()));
                 }
             }
         });

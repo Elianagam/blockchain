@@ -1,5 +1,6 @@
 use crate::utils::messages::*;
 use crate::utils::socket::Socket;
+use crate::utils::logger::Logger;
 
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time;
@@ -13,6 +14,7 @@ pub struct LeaderDiscoverer {
     pub my_address: Arc<RwLock<String>>,
     pub socket: Socket,
     pub other_nodes: Arc<Vec<String>>,
+    pub logger: Arc<Logger>
 }
 
 impl LeaderDiscoverer {
@@ -22,6 +24,7 @@ impl LeaderDiscoverer {
         my_address: Arc<RwLock<String>>,
         socket: Socket,
         other_nodes: Arc<Vec<String>>,
+        logger: Arc<Logger>
     ) -> Self {
         LeaderDiscoverer {
             condvar,
@@ -29,6 +32,7 @@ impl LeaderDiscoverer {
             my_address,
             socket,
             other_nodes,
+            logger
         }
     }
 
@@ -58,7 +62,7 @@ impl LeaderDiscoverer {
             if *leader_found == true {
                 break;
             } else if now.duration_since(time).as_secs() >= LEADER_DISCOVER_TIMEOUT_SECS {
-                println!("TIMEOUT: Leader not found, I become leader");
+                self.logger.info(format!("TIMEOUT: Leader not found, I become leader"));
                 if let Ok(mut leader_addr_mut) = self.leader_addr.write() {
                     *leader_addr_mut = Some((*self.my_address.read().unwrap()).clone());
 
