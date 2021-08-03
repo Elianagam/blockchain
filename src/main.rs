@@ -26,7 +26,7 @@ fn main() {
     if args.len() < 2 {
         process::exit(port_missing());
     }
-    let logger = match Logger::new(format!("log_{}",&args[1])) {
+    let logger = match Logger::new(&format!("log_{}",&args[1])) {
         Ok(logger) => Arc::new(logger),
         Err(e) => {
             println!("{} {:?}: {}", MESSAGE_LOGGER_ERROR, &args[1], e);

@@ -12,6 +12,8 @@ use crate::utils::socket::Socket;
 const ACK_TIMEOUT_SECS: u64 = 2;
 const WAITING_FOR_LOCK_ACQUIRED_TIMEOUT: u64 = 15;
 
+/// Responsible for read msg from stdin with diferent options
+/// 
 pub struct StdinReader {
     leader_condvar: Arc<(Mutex<bool>, Condvar)>,
     socket: Socket,
@@ -49,17 +51,19 @@ impl StdinReader {
         }
     }
 
+    /// Print menu string with options
     fn menu(&self) {
         println!("Select an option:\n\t1. Add block\n\t2. Print Blockchain\n\t3. Exit");
     }
 
+    /// Await until leader is set and read from stdin
+    /// If the msg is a new block adquire mutex and 
+    /// sent that msg to leader addr if the mutex is taken
+    /// Sent the block and realese mutex
     pub fn run(&mut self) {
-
         loop {
-
             self.wait_for_leader();
-
-            let value = self.read_stdin();
+            let value = self.read_option();
             if &value == "" {
                 continue;
             }
@@ -121,6 +125,7 @@ impl StdinReader {
         }
     }
 
+    /// Read a new line from stdin
     fn read(&self) -> String {
         let stdin = io::stdin();
         let mut iterator = stdin.lock().lines();
@@ -128,6 +133,8 @@ impl StdinReader {
         line
     }
 
+    /// If option to add new block was choseen 
+    /// then read again from stdin and return value if is valis
     fn option_add_block(&mut self) -> String {
         println!("Write a block (id,qualification): ");
         let line = self.read();
@@ -138,7 +145,7 @@ impl StdinReader {
         return line.to_string();
     }
 
-    fn read_stdin(&mut self) -> String {
+    fn read_option(&mut self) -> String {
         self.menu();
         let option = self.read();
 
