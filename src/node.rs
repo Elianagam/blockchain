@@ -4,14 +4,14 @@ use crate::blockchain::record::{Record, RecordData};
 use crate::leader_discoverer::LeaderDiscoverer;
 use crate::leader_down_handler::LeaderDownHandler;
 use crate::stdin_reader::StdinReader;
-use crate::utils::{logger, messages::*};
+use crate::utils::messages::*;
 use crate::utils::socket::Socket;
 use crate::utils::logger::Logger;
 
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration};
 use std_semaphore::Semaphore;
 
 const MAX_NODES: u32 = 50;
@@ -215,6 +215,7 @@ impl Node {
             self.my_address.clone(),
             self.socket.try_clone(),
             self.other_nodes.clone(),
+            self.logger.clone()
         );
 
         thread::spawn(move || {
@@ -229,6 +230,7 @@ impl Node {
             self.election_condvar.clone(),
             self.leader_down.clone(),
             self.running_bully.clone(),
+            self.logger.clone()
         );
 
         thread::spawn(move || {

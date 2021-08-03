@@ -1,0 +1,17 @@
+[INFO] - Block {
+    records: [
+        Record {
+            from: "127.0.0.1:8001",
+            created_at: 1628009942.546s,
+            record: CreateStudent(
+                "1",
+                2,
+            ),
+        },
+    ],
+    prev_hash: None,
+    hash: Some(
+        "xlU\u{17}Z\u{97}êñðoyÌ]3õz\u{0}\u{8a}6Ø~Å8½K\u{12}ð÷\u{18}3\u{13}S\u{1d}S\u{19}}.\u{8b}\u{9c}\"\u{11}ÍÞÍKriX\u{97}*fòJ\u{1b}\u{81}\u{4}{f·¦Õ\u{8b}[ß",
+    ),
+}
+

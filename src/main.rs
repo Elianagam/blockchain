@@ -33,14 +33,19 @@ fn main() {
             process::exit(-1);
         }
     };
+    println!("Logging messages will be saved to: {:?}.", args[1]);
 
-    let blockchain_logger = match Logger::new(&format!("{}_blockchain", args[1])) {
+    let blockchain_filename = format!("{}_blockchain", args[1]);
+
+    let blockchain_logger = match Logger::new(&blockchain_filename) {
         Ok(logger) => Arc::new(logger),
         Err(e) => {
             println!("{} {:?}: {}", MESSAGE_LOGGER_ERROR, &args[1], e);
             process::exit(-1);
         }
     };
+
+    println!("Detailed blockchain will be logged in: {:?}\n", blockchain_filename);
 
     let mut node = node::Node::new(&args[1], logger, blockchain_logger);
     node.run();

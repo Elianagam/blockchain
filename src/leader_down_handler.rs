@@ -2,6 +2,7 @@ use crate::utils::messages::*;
 use crate::utils::socket::Socket;
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
+use crate::utils::logger::Logger;
 
 const MAX_NODES: u32 = 50;
 const ELECTION_TIMEOUT_SECS: u64 = 1;
@@ -12,6 +13,7 @@ pub struct LeaderDownHandler {
     pub election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
     pub leader_down: Arc<(Mutex<bool>, Condvar)>,
     pub running_bully: Arc<Mutex<bool>>,
+    pub logger: Arc<Logger>
 }
 
 impl LeaderDownHandler {
@@ -21,6 +23,7 @@ impl LeaderDownHandler {
         election_condvar: Arc<(Mutex<Option<String>>, Condvar)>,
         leader_down: Arc<(Mutex<bool>, Condvar)>,
         running_bully: Arc<Mutex<bool>>,
+        logger: Arc<Logger>
     ) -> Self {
         LeaderDownHandler {
             my_address,
@@ -28,6 +31,7 @@ impl LeaderDownHandler {
             election_condvar,
             leader_down,
             running_bully,
+            logger
         }
     }
 
@@ -51,7 +55,7 @@ impl LeaderDownHandler {
     }
 
     fn run_bully_algorithm(&mut self) {
-        println!("<> Running bully algorithm. <>");
+        self.logger.info(format!("Running bully algorithm"));
 
         for node in self.find_upper_sockets() {
             self.socket.send_to(ELECTION.to_string(), node).unwrap();
