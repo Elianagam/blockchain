@@ -9,7 +9,7 @@ use crate::utils::messages::CLOSE;
 use crate::utils::socket::Socket;
 
 const ACK_TIMEOUT_SECS: u64 = 2;
-const WAITING_FOR_LOCK_ACQUIRED_TIMEOUT: u64 = 60;
+const WAITING_FOR_LOCK_ACQUIRED_TIMEOUT: u64 = 15;
 
 pub struct StdinReader {
     leader_condvar: Arc<(Mutex<bool>, Condvar)>,
@@ -50,8 +50,11 @@ impl StdinReader {
     }
 
     pub fn run(&mut self) {
-        self.leader_found();
+
         loop {
+
+            self.wait_for_leader();
+
             let value = self.read_stdin();
             if &value == "" {
                 continue;
@@ -63,37 +66,43 @@ impl StdinReader {
                 self.socket.send_to(NOOP_MSG.to_string(), me).unwrap();
                 break;
             }
+
             let addr = self.leader_addr.read().unwrap().clone();
             if addr.is_none() {
                 continue;
             }
 
+            // Tomamos el lock del leader
             self.socket
                 .send_to(ACQUIRE_MSG.to_string(), addr.clone().unwrap())
                 .unwrap();
 
-            let (lock, cvar) = &*self.lock_acquired;
-
             // Asumimos que no hay congestion mas de WAITING_FOR_LOCK_ACQUIRED_TIMEOUT
+            // Esperamos en la condvar hasta recibir un mensaje de LOCK_AQUIRED
             {
-                let lock_acquired = lock.lock().unwrap();
+                let (lock, cvar) = &*self.lock_acquired;
+                let guard  = lock.lock().unwrap();
                 let timeout = Duration::from_secs(WAITING_FOR_LOCK_ACQUIRED_TIMEOUT);
                 let result = cvar
-                    .wait_timeout_while(lock_acquired, timeout, |&mut lock_acquired| !lock_acquired)
+                    .wait_timeout_while(guard, timeout, |&mut lock_acquired| !lock_acquired)
                     .unwrap();
 
                 if result.1.timed_out() {
-                    // TODO: Wait for new leader and do this all over again
-                    panic!("Acquired timeout!");
+                    // El lider no nos dió el lock en WAITING_FOR_LOCK_ACQUIRED_TIMEOUT
+                    // puede estar caído o simplemente hay mucha congestión.
+                    self.set_leader_down();
+                    continue;
                 }
             }
 
+            // Nos dieron el lock
             self.socket.send_to(value, addr.clone().unwrap()).unwrap();
+
+            self.wait_for_ack();
+
             self.socket
                 .send_to(RELEASE_MSG.to_string(), addr.clone().unwrap())
                 .unwrap();
-
-            self.handler_ack();
         }
     }
 
@@ -130,39 +139,42 @@ impl StdinReader {
             _ => {
                 println!("Invalid option, choose again...")
             }
-        }
+        }; 
+
         return String::new();
     }
 
-    fn leader_found(&self) {
+    fn wait_for_leader(&self) {
         let (lock, cv) = &*self.leader_condvar;
 
         let mut leader_found = lock.lock().unwrap();
+
         while !*leader_found {
             leader_found = cv.wait(leader_found).unwrap();
         }
     }
 
-    fn handler_ack(&self) {
+    fn wait_for_ack(&self) {
         let (lock, cv) = &*self.msg_ack_cv;
         let mut guard = lock.lock().unwrap();
 
-        //TODO. add guard for spurious wake up
+        // TODO: Si esperar el ack nos da timeout es porque el lider
+        // esta caido. Esperar a que se setee el nuevo lider y reintentar
+        //TODO. Agregar guard para los spurious wake up
         let result = cv
             .wait_timeout(guard, Duration::from_secs(ACK_TIMEOUT_SECS))
             .unwrap();
 
         guard = result.0;
 
-        if !*guard {
-            let (lock_leader_down, cv_leader_down) = &*self.leader_down_cv;
-            let mut guard_leader_down = lock_leader_down.lock().unwrap();
+        if !*guard { self.set_leader_down() }
 
-            *guard_leader_down = true;
-            cv_leader_down.notify_all();
-        }
         *guard = false;
+    }
 
-        // TODO: If timeout: Wait for new leader and do this all over again
+    fn set_leader_down(&self) {
+        let (lock_leader_down, cv_leader_down) = &*self.leader_down_cv;
+        *lock_leader_down.lock().unwrap() = true;
+        cv_leader_down.notify_all();
     }
 }

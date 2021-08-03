@@ -56,16 +56,16 @@ impl LeaderDownHandler {
         for node in self.find_upper_sockets() {
             self.socket.send_to(ELECTION.to_string(), node).unwrap();
         }
-        let (lock, cvar) = &*self.election_condvar;
         let current_value;
 
         let timeout = Duration::from_secs(ELECTION_TIMEOUT_SECS);
 
+        let (lock, cvar) = &*self.election_condvar;
         {
             let guard = lock.lock().unwrap();
-            let result = cvar.wait_timeout(guard, timeout).unwrap();
+            let (guard, _) = cvar.wait_timeout(guard, timeout).unwrap();
 
-            current_value = (*result.0).clone();
+            current_value = (*guard).clone();
         }
 
         if current_value.is_none() {
@@ -81,6 +81,8 @@ impl LeaderDownHandler {
                     .unwrap();
             }
         }
+        // Limpiamos la variable de condición 
+        *lock.lock().unwrap() = None;
     }
 
     fn build_addr_list(&self) -> Vec<String> {

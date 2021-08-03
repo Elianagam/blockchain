@@ -249,17 +249,14 @@ impl Node {
     }
 
     fn handle_lock_acquired(&self) -> () {
-        println!("LOCK AQUIRED!");
         let (lock, cvar) = &*self.lock_acquired;
-        let mut lock_acquired = lock.lock().unwrap();
-        *lock_acquired = true;
+        *lock.lock().unwrap() = true;
         cvar.notify_all();
     }
 
     fn handle_coordinator_msg(&mut self, leader: SocketAddr) -> () {
         let (lock, cvar) = &*self.leader_condvar;
-        let mut leader_found = lock.lock().unwrap();
-        *leader_found = true;
+        *lock.lock().unwrap() = true;
         cvar.notify_all();
 
         if let Ok(mut leader_addr_mut) = self.leader_addr.write() {
@@ -337,7 +334,6 @@ impl Node {
         if let Ok(mut node_id) = self.node_id_with_mutex.write() {
             *node_id = None;
         }
-        println!("{} released mutex", node.to_string());
     }
 
     fn check_if_i_am_leader(&mut self, node_that_asked: String) -> () {
